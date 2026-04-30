@@ -22,18 +22,27 @@ const windowControls = reactive({
   requestMinimize: false,
 });
 
+// ─── 移动端检测 ──────────────────────────────────────────
+
+function isMobile(): boolean {
+  return window.innerWidth < 768;
+}
+
 // ─── 悬浮球 ────────────────────────────────────────────
 
 function createFloatingBall() {
   const ball = document.createElement('div');
   ball.id = 'forum-floating-ball';
   ball.title = '点击展开/收起论坛';
+  const mobile = isMobile();
+  const ballSize = mobile ? '50px' : '44px';
+  const iconSize = mobile ? '20px' : '18px';
   Object.assign(ball.style, {
     position: 'fixed',
-    bottom: '100px',
-    right: '20px',
-    width: '44px',
-    height: '44px',
+    bottom: mobile ? '80px' : '100px',
+    right: mobile ? '12px' : '20px',
+    width: ballSize,
+    height: ballSize,
     borderRadius: '50%',
     backgroundColor: 'rgba(30, 64, 175, 0.85)',
     display: 'flex',
@@ -43,6 +52,7 @@ function createFloatingBall() {
     zIndex: '10001',
     boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
     userSelect: 'none',
+    touchAction: 'none',
     transition: 'transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease',
   });
 
@@ -50,29 +60,51 @@ function createFloatingBall() {
   icon.className = 'fa-solid fa-globe';
   Object.assign(icon.style, {
     color: '#93c5fd',
-    fontSize: '18px',
+    fontSize: iconSize,
     pointerEvents: 'none',
   });
   ball.appendChild(icon);
 
-  // 使用原生 addEventListener 确保跨文档可靠性
-  let mouseDownPos: { x: number; y: number } | null = null;
-  ball.addEventListener('mousedown', (e) => {
-    mouseDownPos = { x: e.clientX, y: e.clientY };
-  });
-  ball.addEventListener('mouseup', (e) => {
-    if (mouseDownPos) {
-      const dx = Math.abs(e.clientX - mouseDownPos.x);
-      const dy = Math.abs(e.clientY - mouseDownPos.y);
-      // 仅在几乎没移动时视为点击（区分点击和拖拽）
-      if (dx < 5 && dy < 5) {
-        togglePanel();
-      }
-      mouseDownPos = null;
+  // 统一处理鼠标和触摸的点击 vs 拖拽区分
+  let downPos: { x: number; y: number } | null = null;
+  let downTime = 0;
+
+  function onDown(x: number, y: number) {
+    downPos = { x, y };
+    downTime = Date.now();
+  }
+  function onUp(x: number, y: number) {
+    if (!downPos) return;
+    const dx = Math.abs(x - downPos.x);
+    const dy = Math.abs(y - downPos.y);
+    const dt = Date.now() - downTime;
+    // 移动距离小且时间短视为点击
+    if (dx < 10 && dy < 10 && dt < 300) {
+      togglePanel();
     }
+    downPos = null;
+  }
+
+  // 鼠标事件
+  ball.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    onDown(e.clientX, e.clientY);
+  });
+  ball.addEventListener('mouseup', (e) => onUp(e.clientX, e.clientY));
+
+  // 触摸事件（移动端）
+  ball.addEventListener('touchstart', (e) => {
+    const t = e.touches[0];
+    onDown(t.clientX, t.clientY);
+  }, { passive: true });
+  ball.addEventListener('touchend', (e) => {
+    const t = e.changedTouches[0];
+    onUp(t.clientX, t.clientY);
   });
 
+  // 悬停效果（仅桌面）
   ball.addEventListener('mouseenter', () => {
+    if (isMobile()) return;
     Object.assign(ball.style, {
       transform: 'scale(1.1)',
       boxShadow: '0 6px 20px rgba(0,0,0,0.5)',
@@ -80,6 +112,7 @@ function createFloatingBall() {
     });
   });
   ball.addEventListener('mouseleave', () => {
+    if (isMobile()) return;
     Object.assign(ball.style, {
       transform: 'scale(1)',
       boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
@@ -87,15 +120,18 @@ function createFloatingBall() {
     });
   });
 
-  // 添加到酒馆页面 body（用 jQuery 的 $ 是 window.parent.$）
+  // 添加到酒馆页面 body
   $('body').append(ball);
 
   // jQuery 引用，用于 draggable
   $ball = $(ball);
-  $ball.draggable({
-    iframeFix: true,
-    containment: 'window',
-  });
+  if (!mobile) {
+    // 桌面端用 jQuery UI draggable
+    $ball.draggable({
+      iframeFix: true,
+      containment: 'window',
+    });
+  }
 }
 
 // ─── 面板 ──────────────────────────────────────────────
@@ -110,21 +146,26 @@ function createPanel() {
     cursor: 'move',
     flexShrink: '0',
     borderRadius: '8px 8px 0 0',
+    touchAction: 'none',
   });
 
-  // 面板容器
+  // 移动端 vs 桌面端面板尺寸
+  const mobile = isMobile();
+
+  // 面板容器（默认隐藏，由 activateForum() 控制显隐）
   $panel = $('<div>').css({
     position: 'fixed',
-    top: '80px',
-    right: '20px',
-    width: '400px',
-    height: '520px',
+    top: mobile ? '0' : '80px',
+    right: mobile ? '0' : '20px',
+    bottom: mobile ? '0' : undefined,
+    width: mobile ? '100vw' : '400px',
+    height: mobile ? '100vh' : '520px',
     zIndex: '10000',
-    border: '1px solid #374151',
-    borderRadius: '8px',
-    boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+    border: mobile ? 'none' : '1px solid #374151',
+    borderRadius: mobile ? '0' : '8px',
+    boxShadow: mobile ? 'none' : '0 25px 50px -12px rgba(0,0,0,0.5)',
     overflow: 'hidden',
-    display: 'flex',
+    display: 'none', // 默认隐藏！
     flexDirection: 'column',
     backgroundColor: 'transparent',
   });
@@ -139,11 +180,13 @@ function createPanel() {
 
   $panel.append($(dragStrip)).append($app).appendTo('body');
 
-  // 面板通过拖拽条拖动
-  $panel.draggable({
-    handle: $(dragStrip),
-    iframeFix: true,
-  });
+  // 面板通过拖拽条拖动（仅桌面端）
+  if (!mobile) {
+    $panel.draggable({
+      handle: $(dragStrip),
+      iframeFix: true,
+    });
+  }
 
   // 挂载 Vue 应用
   mountVueApp();
@@ -184,6 +227,12 @@ function mountVueApp() {
     `;
     iframeDoc.head.appendChild(fixStyle);
 
+    // 移动端 viewport 适配
+    const mobileViewport = iframeDoc.createElement('meta');
+    mobileViewport.name = 'viewport';
+    mobileViewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+    iframeDoc.head.appendChild(mobileViewport);
+
     styleDestroy = teleportStyle(iframeDoc.head);
 
     app.mount(iframeDoc.body);
@@ -216,11 +265,12 @@ function expandPanel() {
   forumState = 'expanded';
 }
 
-/** 激活论坛功能（创建悬浮球 + 展开面板） */
+/** 激活论坛功能（创建悬浮球 + 最小化面板，只显示球） */
 function activateForum() {
   createFloatingBall();
   createPanel();
-  forumState = 'expanded';
+  // 面板默认隐藏，只显示悬浮球
+  forumState = 'minimized';
 }
 
 /** 完全关闭论坛功能（移除悬浮球 + 面板） */
