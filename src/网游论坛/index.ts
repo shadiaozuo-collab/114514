@@ -316,12 +316,23 @@ $(() => {
   eventOn(getButtonEvent('论坛'), () => {
     if (forumState === 'inactive') {
       activateForum();
-    } else if (forumState === 'expanded') {
-      minimizePanel();
+      expandPanel();
     } else {
-      deactivateForum();
+      togglePanel();
     }
   });
+
+  // 延迟自动激活，确保酒馆助手脚本上下文完全就绪后再创建悬浮球
+  // 如果太早调用，getScriptId() 等函数可能尚未可用
+  setTimeout(() => {
+    if (forumState === 'inactive') {
+      try {
+        activateForum();
+      } catch (e) {
+        console.warn('[网游论坛] 自动激活失败，请点击「论坛」按钮手动激活:', e);
+      }
+    }
+  }, 1500);
 
   $(window).on('pagehide', () => {
     deactivateForum();
