@@ -183,8 +183,14 @@ function tavern_sync(compiler: webpack.Compiler) {
 }
 
 function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Configuration {
+<<<<<<< HEAD
   const script_source = fs.readFileSync(path.join(import.meta.dirname, entry.script), 'utf-8');
   const should_obfuscate = script_source.includes('@obfuscate');
+=======
+  const should_obfuscate = fs
+    .readFileSync(path.join(import.meta.dirname, entry.script), 'utf-8')
+    .includes('@obfuscate');
+>>>>>>> dc79e70c2b507a4984bc1620b1a875e1a4ff083d
   const script_filepath = path.parse(entry.script);
 
   return (_env, argv) => ({
@@ -219,7 +225,13 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
       asyncChunks: true,
       clean: true,
       publicPath: '',
+<<<<<<< HEAD
       library: { type: 'module' },
+=======
+      library: {
+        type: 'module',
+      },
+>>>>>>> dc79e70c2b507a4984bc1620b1a875e1a4ff083d
     },
     module: {
       rules: [
