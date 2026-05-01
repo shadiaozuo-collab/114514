@@ -36,7 +36,7 @@ import { useForumSettingsStore } from './settings';
 defineProps<{ activeSection: 'A' | 'B' }>();
 defineEmits<{ switch: [section: 'A' | 'B']; toggleSettings: []; close: [] }>();
 
-const isMobile = window.innerWidth <= 768;
+const isMobile = ('ontouchstart' in window || navigator.maxTouchPoints > 0) && window.innerWidth <= 768;
 
 const settingsStore = useForumSettingsStore();
 const tabs = computed(() => [

@@ -23,8 +23,14 @@ let styleTeleport: { destroy: () => void } | null = null;
 let autoInjectCleanup: (() => void) | null = null;
 let autoGenCleanup: (() => void) | null = null;
 
+function isMobileDevice() {
+  const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  const isSmallScreen = window.innerWidth <= 768;
+  return isTouch && isSmallScreen;
+}
+
 function openForum() {
-  const isMobile = window.innerWidth <= 768;
+  const isMobile = isMobileDevice();
 
   if ($iframe) {
     const $container = $iframe.parent();
