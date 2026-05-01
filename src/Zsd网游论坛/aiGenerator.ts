@@ -181,6 +181,39 @@ function parseRawPosts(rawPosts: any[], section: 'A' | 'B', sourceMessageIndex?:
 }
 
 /** 将本轮生成的帖子ID记录到当前AI消息的extra中，用于后续回退同步 */
+/** 安全解析AI返回的JSON，处理HTML错误页、Markdown代码块等边缘情况 */
+function safeJsonParse(raw: string): any {
+  const text = String(raw || '').trim();
+
+  // 1. 如果返回的是HTML错误页，直接抛出友好错误
+  if (text.startsWith('<')) {
+    const preview = text.substring(0, 200).replace(/\s+/g, ' ');
+    throw new Error(`API返回了HTML页面而非JSON，可能是API配置错误或服务器故障。预览: ${preview}`);
+  }
+
+  // 2. 尝试从Markdown代码块中提取JSON
+  const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  if (codeBlockMatch) {
+    try {
+      return JSON.parse(codeBlockMatch[1].trim());
+    } catch {}
+  }
+
+  // 3. 尝试直接解析
+  try {
+    return JSON.parse(text);
+  } catch (e: any) {
+    // 4. 尝试去掉首尾的非JSON字符（如引号、换行等）
+    const cleaned = text.replace(/^[^{\[]+/, '').replace(/[^}\]]+$/, '');
+    if (cleaned !== text) {
+      try {
+        return JSON.parse(cleaned);
+      } catch {}
+    }
+    throw new Error(`AI返回的内容无法解析为JSON。原始内容前200字符: ${text.substring(0, 200)}`);
+  }
+}
+
 function recordPostIdsToMessage(postsA: ForumPost[], postsB: ForumPost[]) {
   try {
     const ctx = SillyTavern.getContext();
@@ -245,7 +278,7 @@ export async function generatePosts(section: 'A' | 'B', topic?: string) {
         ],
       });
 
-  const parsed = JSON.parse(result as string);
+  const parsed = safeJsonParse(result as string);
   const posts = parseRawPosts(parsed.posts || [], section, SillyTavern.getContext().chat.length - 1);
   recordPostIdsToMessage(section === 'A' ? posts : [], section === 'B' ? posts : []);
   return posts;
@@ -318,7 +351,7 @@ export async function generatePostsForBothSections(topic?: string) {
         ],
       });
 
-  const parsed = JSON.parse(result as string);
+  const parsed = safeJsonParse(result as string);
   const sourceIndex = SillyTavern.getContext().chat.length - 1;
   const postsA = parseRawPosts(parsed.A?.posts || [], 'A', sourceIndex);
   const postsB = parseRawPosts(parsed.B?.posts || [], 'B', sourceIndex);
@@ -369,7 +402,7 @@ export async function generateComments(section: 'A' | 'B', post: ForumPost) {
         ],
       });
 
-  const parsed = JSON.parse(result as string);
+  const parsed = safeJsonParse(result as string);
   return (parsed.comments || []).map((c: any) => ({
     id: generateId(),
     authorId: c.authorId || '匿名用户',
