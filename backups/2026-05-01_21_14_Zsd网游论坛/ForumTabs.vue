@@ -20,10 +20,10 @@
       </button>
       <button
         class="flex items-center justify-center w-6 h-6 rounded transition-colors text-[var(--f-text-muted)] hover:text-[var(--f-danger)] hover:bg-[var(--f-danger-bg)] bg-[var(--f-bg-input)]"
-        :title="isMobile ? '返回' : '关闭'"
+        title="关闭"
         @click="$emit('close')"
       >
-        <i class="fa-solid text-[10px]" :class="isMobile ? 'fa-arrow-left' : 'fa-xmark'"></i>
+        <i class="fa-solid fa-xmark text-[10px]"></i>
       </button>
     </div>
   </div>
@@ -35,8 +35,6 @@ import { useForumSettingsStore } from './settings';
 
 defineProps<{ activeSection: 'A' | 'B' }>();
 defineEmits<{ switch: [section: 'A' | 'B']; toggleSettings: []; close: [] }>();
-
-const isMobile = window.innerWidth <= 768;
 
 const settingsStore = useForumSettingsStore();
 const tabs = computed(() => [

@@ -29,23 +29,7 @@ function openForum() {
     return;
   }
 
-  const isMobile = window.innerWidth <= 768;
-
-  const $container = $('<div>').attr('script_id', SCRIPT_ID).css(isMobile ? {
-    position: 'fixed',
-    top: '0',
-    right: '0',
-    width: '100vw',
-    height: '100vh',
-    zIndex: '100000',
-    border: 'none',
-    borderRadius: '0',
-    boxShadow: 'none',
-    overflow: 'hidden',
-    display: 'flex',
-    flexDirection: 'column',
-    backgroundColor: 'transparent',
-  } : {
+  const $container = $('<div>').attr('script_id', SCRIPT_ID).css({
     position: 'fixed',
     top: '80px',
     right: '20px',
@@ -64,9 +48,9 @@ function openForum() {
   const $header = $('<div>').addClass('zsd-forum-drag-handle').css({
     height: '28px',
     minHeight: '28px',
-    cursor: isMobile ? 'default' : 'grab',
+    cursor: 'grab',
     flexShrink: '0',
-    borderRadius: isMobile ? '0' : '8px 8px 0 0',
+    borderRadius: '8px 8px 0 0',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
