@@ -439,6 +439,40 @@ function setupAutoGenerate() {
   };
 }
 
+function registerExtensionMenuItem() {
+  try {
+    const parentDoc = (window.parent || window).document;
+    const $extMenu = $('#extensionsMenu', parentDoc);
+    if (!$extMenu.length) {
+      setTimeout(registerExtensionMenuItem, 2000);
+      return;
+    }
+    if ($extMenu.find('#zsd-forum-menu-item').length > 0) return;
+
+    const $item = $(`
+      <div class="list-group-item flex-container flexGap5 interactable" id="zsd-forum-menu-item" title="打开/关闭网游论坛">
+        <div class="fa-fw fa-solid fa-comments extensionsMenuExtensionButton"></div>
+        <span>网游论坛</span>
+      </div>
+    `);
+    $item.on('click', () => {
+      const $btn = $('#extensionsMenuButton', parentDoc);
+      if ($btn.length && $extMenu.is(':visible')) {
+        $btn.trigger('click');
+      }
+      if ($iframe && $iframe.parent().is(':visible')) {
+        closeForum();
+      } else {
+        openForum();
+      }
+    });
+    $extMenu.append($item);
+    console.log('[网游论坛] 已注册到扩展菜单');
+  } catch (e) {
+    console.warn('[网游论坛] 注册扩展菜单失败:', e);
+  }
+}
+
 $(() => {
   appendInexistentScriptButtons([{ name: '论坛', visible: true }]);
   eventOn(getButtonEvent('论坛'), () => {
@@ -448,6 +482,7 @@ $(() => {
       openForum();
     }
   });
+  registerExtensionMenuItem();
 
   eventOn(tavern_events.CHAT_CHANGED, () => {
     try {
