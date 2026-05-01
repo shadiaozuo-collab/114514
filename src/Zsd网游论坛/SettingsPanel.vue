@@ -288,6 +288,16 @@
           <option v-for="sec in store.settings.Zsections" :key="sec.id" :value="sec.id">{{ sec.name }}</option>
         </select>
       </div>
+      <div v-if="store.settings.ZautoGenerateInterval !== 0">
+        <label class="text-[11px] text-[var(--f-text-secondary)] block mb-1">多板块自动生成模式</label>
+        <select v-model="store.settings.ZautoGenerateMode" class="w-full text-xs px-2 py-1.5 rounded outline-none border focus:border-[var(--f-accent)]" :style="inputStyle">
+          <option value="sequential">独立生成（逐个调用，更稳定）</option>
+          <option value="merged">合并生成（单次调用，更快）</option>
+        </select>
+        <p v-if="store.settings.ZautoGenerateMode === 'merged' && store.settings.Zsections.length > 3" class="text-[10px] text-[var(--f-danger)] mt-1">
+          <i class="fa-solid fa-triangle-exclamation"></i> 板块超过3个时，合并生成可能不可靠
+        </p>
+      </div>
 
       <!-- 自动清理 -->
       <div class="border-b pb-2 mt-2" :style="{ borderColor: 'var(--f-border)' }">

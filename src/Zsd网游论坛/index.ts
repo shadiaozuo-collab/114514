@@ -400,8 +400,17 @@ function setupAutoGenerate() {
           }
           toastr.success(`[论坛] 自动生成完成：${posts.length}个帖子`);
           console.log(`[网游论坛] 自动生成完成 ${posts.length}个帖子`);
+        } else if (store.settings.ZautoGenerateMode === 'merged') {
+          const result = await generatePostsMerged(targetSections);
+          let total = 0;
+          for (const [secId, posts] of Object.entries(result)) {
+            for (const post of posts) store.addPost(post);
+            total += posts.length;
+          }
+          const details = Object.entries(result).map(([k, v]) => `${store.getSectionName(k)}:${v.length}`).join(' ');
+          toastr.success(`[论坛] 自动生成完成：共${total}个帖子（${details}）`);
+          console.log(`[网游论坛] 自动生成完成 ${details}`);
         } else {
-          // 多板块使用独立生成（sequential），避免合并模式不可靠
           const result = await generatePostsSequential(targetSections);
           let total = 0;
           for (const [secId, posts] of Object.entries(result)) {

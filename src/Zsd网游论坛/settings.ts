@@ -125,6 +125,7 @@ const SettingsSchema = z.object({
   ZinjectChatHistoryCount: z.coerce.number().default(10),
   ZautoGenerateInterval: z.coerce.number().default(0),
   ZautoGenerateSection: z.string().default('all'),
+  ZautoGenerateMode: z.enum(['sequential', 'merged']).default('sequential'),
   ZautoAiReply: z.boolean().default(false),
   ZincludePresetContext: z.boolean().default(true),
   ZbgImage: z.string().default(''),
