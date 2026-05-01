@@ -36,7 +36,8 @@ import { useForumSettingsStore } from './settings';
 defineProps<{ activeSection: 'A' | 'B' }>();
 defineEmits<{ switch: [section: 'A' | 'B']; toggleSettings: []; close: [] }>();
 
-const isMobile = ('ontouchstart' in window || navigator.maxTouchPoints > 0) && window.innerWidth <= 768;
+const isMobile = /Android(?!.*Tablet)|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+  || (window.matchMedia('(pointer: coarse)').matches && window.matchMedia('(hover: none)').matches && window.innerWidth <= 768);
 
 const settingsStore = useForumSettingsStore();
 const tabs = computed(() => [

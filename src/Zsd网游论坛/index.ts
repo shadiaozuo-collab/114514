@@ -24,9 +24,12 @@ let autoInjectCleanup: (() => void) | null = null;
 let autoGenCleanup: (() => void) | null = null;
 
 function isMobileDevice() {
-  const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-  const isSmallScreen = window.innerWidth <= 768;
-  return isTouch && isSmallScreen;
+  // 通过 User Agent 明确检测手机（不包含 iPad/平板）
+  const isPhone = /Android(?!.*Tablet)|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  // 兜底：粗糙指针 + 不能悬停 + 小屏幕（用于 UA 检测失败的边缘情况）
+  const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
+  const isNoHover = window.matchMedia('(hover: none)').matches;
+  return isPhone || (isCoarsePointer && isNoHover && window.innerWidth <= 768);
 }
 
 function openForum() {
