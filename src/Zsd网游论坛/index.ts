@@ -24,12 +24,27 @@ let autoInjectCleanup: (() => void) | null = null;
 let autoGenCleanup: (() => void) | null = null;
 
 function openForum() {
+  const isMobile = window.innerWidth <= 768;
+
   if ($iframe) {
-    $iframe.parent().show();
+    const $container = $iframe.parent();
+    $container.show();
+    if (isMobile) {
+      $container.css({
+        top: '0', right: '0', width: '100vw', height: '100vh',
+        zIndex: '100000', border: 'none', borderRadius: '0', boxShadow: 'none',
+      });
+      $container.find('.zsd-forum-drag-handle').css({ cursor: 'default', borderRadius: '0' });
+    } else {
+      $container.css({
+        top: '80px', right: '20px', width: '420px', height: '560px',
+        zIndex: '10000', border: '1px solid #374151', borderRadius: '8px',
+        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+      });
+      $container.find('.zsd-forum-drag-handle').css({ cursor: 'grab', borderRadius: '8px 8px 0 0' });
+    }
     return;
   }
-
-  const isMobile = window.innerWidth <= 768;
 
   const $container = $('<div>').attr('script_id', SCRIPT_ID).css(isMobile ? {
     position: 'fixed',
