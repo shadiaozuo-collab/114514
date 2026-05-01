@@ -24,6 +24,11 @@ let autoInjectCleanup: (() => void) | null = null;
 let autoGenCleanup: (() => void) | null = null;
 
 function isMobileDevice() {
+  // 调试用：localStorage 强制手机/桌面模式
+  const force = localStorage.getItem('zsdForumForceMobile');
+  if (force === '1') return true;
+  if (force === '0') return false;
+
   // 通过 User Agent 明确检测手机（不包含 iPad/平板）
   const isPhone = /Android(?!.*Tablet)|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   // 兜底：粗糙指针 + 不能悬停 + 小屏幕（用于 UA 检测失败的边缘情况）
