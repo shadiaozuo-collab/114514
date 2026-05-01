@@ -8,7 +8,7 @@ export interface ForumComment {
 
 export interface ForumPost {
   id: string;
-  section: 'A' | 'B';
+  section: string;
   title: string;
   content: string;
   authorId: string;

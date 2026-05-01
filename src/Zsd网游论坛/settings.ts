@@ -15,9 +15,7 @@ const CommentSchema = z.object({
 
 const PostSchema = z.object({
   id: z.string(),
-  section: z.enum(['A', 'B', '现实讨论', '游戏中论坛']).transform(v =>
-    v === '现实讨论' ? 'A' : v === '游戏中论坛' ? 'B' : v,
-  ),
+  section: z.string(),
   title: z.string(),
   content: z.string(),
   authorId: z.string(),
@@ -33,6 +31,12 @@ const ApiPresetSchema = z.object({
   apiKey: z.string().default(''),
   apiSource: z.string().default(''),
   model: z.string().default(''),
+});
+
+const SectionConfigSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  prompt: z.string(),
 });
 
 const defaultOutputFormat = `你必须严格按照以下JSON结构输出，不要添加、删除或重命名字段：
@@ -95,34 +99,32 @@ const SettingsSchema = z.object({
   ZcustomAccent: z.string().default('#60a5fa'),
   ZcustomText: z.string().default('#e5e7eb'),
   ZcustomCardBg: z.string().default('#1f2937'),
-  ZsectionAName: z.string().default('现实讨论'),
-  ZsectionBName: z.string().default('游戏中论坛'),
+
+  // 旧字段保留兼容（迁移后不再使用）
+  ZsectionAName: z.string().optional().transform(() => undefined),
+  ZsectionBName: z.string().optional().transform(() => undefined),
+  Zprompt_A: z.string().optional().transform(() => undefined),
+  Zprompt_B: z.string().optional().transform(() => undefined),
+  Zprompt_现实讨论: z.string().optional().transform(() => undefined),
+  Zprompt_游戏中论坛: z.string().optional().transform(() => undefined),
+
+  Zsections: z.array(SectionConfigSchema).default([
+    { id: 'A', name: '现实讨论', prompt: defaultPromptA },
+    { id: 'B', name: '游戏中论坛', prompt: defaultPromptB },
+  ]),
+
   ZplayerForumId: z.string().default(''),
   ZauthorIdPrompt: z.string().default(defaultAuthorIdPrompt),
-  Zprompt_A: z.string().default(defaultPromptA),
-  Zprompt_B: z.string().default(defaultPromptB),
-  Zprompt_现实讨论: z.string().optional().transform(v => v),
-  Zprompt_游戏中论坛: z.string().optional().transform(v => v),
   ZoutputFormat: z.string().default(defaultOutputFormat),
   ZpostCountHint: z.coerce.number().default(3),
   ZcommentCountHint: z.coerce.number().default(3),
   ZdecentralizedMode: z.boolean().default(false),
-  Zposts: z.object({
-    现实讨论: z.array(PostSchema).optional(),
-    游戏中论坛: z.array(PostSchema).optional(),
-    A: z.array(PostSchema).optional(),
-    B: z.array(PostSchema).optional(),
-  }).transform(v => ({
-    A: v.A || v['现实讨论'] || [],
-    B: v.B || v['游戏中论坛'] || [],
-  })).default({ A: [], B: [] }),
+  Zposts: z.record(z.string(), z.array(PostSchema)).default({ A: [], B: [] }),
   ZenableInjectToChat: z.boolean().default(true),
   ZinjectPostCount: z.coerce.number().default(5),
   ZinjectChatHistoryCount: z.coerce.number().default(10),
   ZautoGenerateInterval: z.coerce.number().default(0),
-  ZautoGenerateSection: z.enum(['A', 'B', '现实讨论', '游戏中论坛', 'both']).transform(v =>
-    v === '现实讨论' ? 'A' : v === '游戏中论坛' ? 'B' : v,
-  ).default('both'),
+  ZautoGenerateSection: z.string().default('all'),
   ZautoAiReply: z.boolean().default(false),
   ZincludePresetContext: z.boolean().default(true),
   ZbgImage: z.string().default(''),
@@ -140,8 +142,38 @@ const SettingsSchema = z.object({
 
 function migrateLegacySettings(vars: Record<string, any>) {
   const result = { ...vars };
-  if (result.Zprompt_现实讨论 && !result.Zprompt_A) result.Zprompt_A = result.Zprompt_现实讨论;
-  if (result.Zprompt_游戏中论坛 && !result.Zprompt_B) result.Zprompt_B = result.Zprompt_游戏中论坛;
+
+  // 如果还没有 Zsections，从旧字段构建
+  if (!result.Zsections) {
+    const nameA = result.ZsectionAName || '现实讨论';
+    const nameB = result.ZsectionBName || '游戏中论坛';
+    const promptA = result.Zprompt_A || result.Zprompt_现实讨论 || defaultPromptA;
+    const promptB = result.Zprompt_B || result.Zprompt_游戏中论坛 || defaultPromptB;
+    result.Zsections = [
+      { id: 'A', name: nameA, prompt: promptA },
+      { id: 'B', name: nameB, prompt: promptB },
+    ];
+  }
+
+  // Zposts 旧格式迁移（中文键名 → A/B）
+  if (result.Zposts && typeof result.Zposts === 'object') {
+    const posts = result.Zposts as Record<string, any>;
+    const migrated: Record<string, any> = {};
+    for (const [key, value] of Object.entries(posts)) {
+      const normalizedKey = key === '现实讨论' ? 'A' : key === '游戏中论坛' ? 'B' : key;
+      migrated[normalizedKey] = value;
+    }
+    result.Zposts = migrated;
+  }
+
+  // ZautoGenerateSection 旧格式迁移
+  if (result.ZautoGenerateSection) {
+    const v = result.ZautoGenerateSection;
+    if (v === '现实讨论') result.ZautoGenerateSection = 'A';
+    else if (v === '游戏中论坛') result.ZautoGenerateSection = 'B';
+    else if (v === 'both') result.ZautoGenerateSection = 'all';
+  }
+
   return result;
 }
 
@@ -172,6 +204,9 @@ export const useForumSettingsStore = defineStore('forum-settings', () => {
   });
 
   function addPost(post: ForumPost) {
+    if (!settings.value.Zposts[post.section]) {
+      settings.value.Zposts[post.section] = [];
+    }
     settings.value.Zposts[post.section].unshift(post);
     if (settings.value.ZautoCleanEnabled) {
       const arr = settings.value.Zposts[post.section];
@@ -182,13 +217,14 @@ export const useForumSettingsStore = defineStore('forum-settings', () => {
     }
   }
 
-  function addComment(section: 'A' | 'B', postId: string, comment: ForumComment) {
-    const post = settings.value.Zposts[section].find(p => p.id === postId);
+  function addComment(sectionId: string, postId: string, comment: ForumComment) {
+    const post = settings.value.Zposts[sectionId]?.find(p => p.id === postId);
     if (post) post.comments.push(comment);
   }
 
-  function deletePost(section: 'A' | 'B', postId: string) {
-    const arr = settings.value.Zposts[section];
+  function deletePost(sectionId: string, postId: string) {
+    const arr = settings.value.Zposts[sectionId];
+    if (!arr) return;
     const idx = arr.findIndex(p => p.id === postId);
     if (idx >= 0) arr.splice(idx, 1);
   }
@@ -217,12 +253,34 @@ export const useForumSettingsStore = defineStore('forum-settings', () => {
     }
   }
 
-  function getSectionName(section: 'A' | 'B') {
-    return section === 'A' ? settings.value.ZsectionAName : settings.value.ZsectionBName;
+  function getSectionName(sectionId: string) {
+    return settings.value.Zsections.find(s => s.id === sectionId)?.name || sectionId;
   }
 
-  function getPromptKey(section: 'A' | 'B') {
-    return section === 'A' ? 'Zprompt_A' : 'Zprompt_B';
+  function getSectionPrompt(sectionId: string) {
+    return settings.value.Zsections.find(s => s.id === sectionId)?.prompt || '';
+  }
+
+  function addSection(name: string, prompt: string) {
+    if (settings.value.Zsections.length >= 5) {
+      toastr.warning('板块数量已达上限（5个）');
+      return;
+    }
+    const id = 'sec' + Date.now().toString(36);
+    settings.value.Zsections.push({ id, name, prompt });
+    settings.value.Zposts[id] = settings.value.Zposts[id] || [];
+  }
+
+  function removeSection(sectionId: string) {
+    if (settings.value.Zsections.length <= 1) {
+      toastr.warning('至少保留一个板块');
+      return;
+    }
+    const idx = settings.value.Zsections.findIndex(s => s.id === sectionId);
+    if (idx >= 0) {
+      settings.value.Zsections.splice(idx, 1);
+      delete settings.value.Zposts[sectionId];
+    }
   }
 
   function applyApiPreset(name: string) {
@@ -269,7 +327,9 @@ export const useForumSettingsStore = defineStore('forum-settings', () => {
     clearAllForumVariables,
     reloadFromVars,
     getSectionName,
-    getPromptKey,
+    getSectionPrompt,
+    addSection,
+    removeSection,
     applyApiPreset,
     saveApiPreset,
     deleteApiPreset,
@@ -279,22 +339,22 @@ export const useForumSettingsStore = defineStore('forum-settings', () => {
 
 export const useForumUiStore = defineStore('forum-ui', () => {
   const settingsStore = useForumSettingsStore();
-  const activeSection = ref<'A' | 'B'>('A');
+  const activeSection = ref<string>('A');
   const selectedPostId = ref<string | null>(null);
   const isGenerating = ref(false);
   const showEditor = ref(false);
   const showGenDialog = ref(false);
   const editorMode = ref<'post' | 'comment'>('post');
 
-  const currentPosts = computed(() => settingsStore.settings.Zposts[activeSection.value]);
+  const currentPosts = computed(() => settingsStore.settings.Zposts[activeSection.value] || []);
   const selectedPost = computed(() => {
     if (!selectedPostId.value) return null;
     return currentPosts.value.find(p => p.id === selectedPostId.value) ?? null;
   });
   const activeSectionName = computed(() => settingsStore.getSectionName(activeSection.value));
 
-  function switchSection(section: 'A' | 'B') {
-    activeSection.value = section;
+  function switchSection(sectionId: string) {
+    activeSection.value = sectionId;
     selectedPostId.value = null;
   }
 

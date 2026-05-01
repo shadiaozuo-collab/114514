@@ -3,7 +3,7 @@ import { createApp, reactive, watch } from 'vue';
 import { reloadOnChatChange, createScriptIdIframe, teleportStyle } from '@util/script';
 import App from './App.vue';
 import { useForumSettingsStore } from './settings';
-import { injectForumContext, uninjectForumContext, generatePosts, generatePostsForBothSections } from './aiGenerator';
+import { injectForumContext, uninjectForumContext, generatePosts, generatePostsSequential } from './aiGenerator';
 
 const themeColors: Record<string, { bg: string; text: string }> = {
   'classic-dark': { bg: '#1f2937', text: '#93c5fd' },
@@ -281,23 +281,31 @@ function cleanupOrphanPosts() {
       if (msg.is_user) continue;
       const gen = msg.extra?.zsdForumGeneration;
       if (gen) {
+        // 兼容旧格式
         gen.postsA?.forEach((id: string) => referencedIds.add(id));
         gen.postsB?.forEach((id: string) => referencedIds.add(id));
+        // 新格式
+        if (gen.posts) {
+          for (const ids of Object.values(gen.posts)) {
+            (ids as string[]).forEach((id: string) => referencedIds.add(id));
+          }
+        }
       }
     }
 
     const store = useForumSettingsStore();
     let removed = 0;
 
-    for (const section of ['A', 'B'] as const) {
-      const before = store.settings.Zposts[section].length;
-      store.settings.Zposts[section] = store.settings.Zposts[section].filter(p => {
+    for (const sectionId of Object.keys(store.settings.Zposts)) {
+      const posts = store.settings.Zposts[sectionId] || [];
+      const before = posts.length;
+      store.settings.Zposts[sectionId] = posts.filter(p => {
         // 手动添加的帖子（无sourceMessageIndex）永远保留
         if (p.sourceMessageIndex === undefined) return true;
         // AI生成的帖子：只有被某条现存AI消息引用才保留
         return referencedIds.has(p.id);
       });
-      removed += before - store.settings.Zposts[section].length;
+      removed += before - store.settings.Zposts[sectionId].length;
     }
 
     if (removed > 0) {
@@ -378,24 +386,31 @@ function setupAutoGenerate() {
       msgCount = 0;
       isGenerating = true;
       const section = store.settings.ZautoGenerateSection;
-      const sectionLabel = section === 'both' ? 'A+B' : store.getSectionName(section);
+      const allSectionIds = store.settings.Zsections.map(s => s.id);
+      const isAll = section === 'all';
+      const targetSections = isAll ? allSectionIds : [section];
+      const sectionLabel = isAll ? '全部板块' : store.getSectionName(section);
       console.log(`[网游论坛] 开始自动生成板块: ${sectionLabel}`);
-      toastr.info(`[论坛] 正在生成 ${sectionLabel} 板块帖子…`);
+      toastr.info(`[论坛] 正在生成 ${sectionLabel} 帖子…`);
       try {
-        if (section === 'both') {
-          const result = await generatePostsForBothSections();
-          for (const post of result.A) store.addPost(post);
-          for (const post of result.B) store.addPost(post);
-          const total = result.A.length + result.B.length;
-          toastr.success(`[论坛] 自动生成完成：共${total}个帖子（A:${result.A.length} B:${result.B.length}）`);
-          console.log(`[网游论坛] 自动生成完成 A=${result.A.length} B=${result.B.length}`);
-        } else {
-          const posts = await generatePosts(section);
+        if (targetSections.length === 1) {
+          const posts = await generatePosts(targetSections[0]);
           for (const post of posts) {
             store.addPost(post);
           }
           toastr.success(`[论坛] 自动生成完成：${posts.length}个帖子`);
           console.log(`[网游论坛] 自动生成完成 ${posts.length}个帖子`);
+        } else {
+          // 多板块使用独立生成（sequential），避免合并模式不可靠
+          const result = await generatePostsSequential(targetSections);
+          let total = 0;
+          for (const [secId, posts] of Object.entries(result)) {
+            for (const post of posts) store.addPost(post);
+            total += posts.length;
+          }
+          const details = Object.entries(result).map(([k, v]) => `${store.getSectionName(k)}:${v.length}`).join(' ');
+          toastr.success(`[论坛] 自动生成完成：共${total}个帖子（${details}）`);
+          console.log(`[网游论坛] 自动生成完成 ${details}`);
         }
         injectForumContext();
       } catch (e: any) {

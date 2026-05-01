@@ -61,7 +61,7 @@ import { ref, computed } from 'vue';
 import { useForumSettingsStore } from './settings';
 import { generateId } from './aiGenerator';
 
-const props = defineProps<{ mode: 'post' | 'comment'; section: 'A' | 'B'; postId?: string }>();
+const props = defineProps<{ mode: 'post' | 'comment'; section: string; postId?: string }>();
 const emit = defineEmits<{ cancel: []; submitPost: [post: any]; submitComment: [postId: string, comment: any] }>();
 
 const settingsStore = useForumSettingsStore();

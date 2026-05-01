@@ -64,7 +64,7 @@
         class="flex-1 text-[11px] text-white py-1.5 rounded disabled:opacity-50 transition-colors"
         :class="forumStore.isGenerating ? 'bg-[var(--f-bg-input)] cursor-wait' : 'bg-[var(--f-accent-bg)] hover:bg-[var(--f-accent-bg-hover)]'"
         :disabled="forumStore.isGenerating"
-        @click="forumStore.openGenDialog()"
+        @click="openGenDialog()"
       >
         <i :class="forumStore.isGenerating ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-robot'"></i>
         {{ forumStore.isGenerating ? '生成中...' : 'AI生成帖子' }}
@@ -88,7 +88,41 @@
           <i class="fa-solid fa-xmark"></i>
         </button>
       </div>
-      <div class="space-y-3 flex-1">
+      <div class="space-y-3 flex-1 overflow-y-auto">
+        <div>
+          <label class="text-[11px] text-[var(--f-text-secondary)] block mb-1">生成模式</label>
+          <div class="flex gap-2 text-[11px]">
+            <label class="flex items-center gap-1 cursor-pointer">
+              <input v-model="genMode" type="radio" value="single" class="accent-[var(--f-accent)]">
+              <span>仅当前板块</span>
+            </label>
+            <label class="flex items-center gap-1 cursor-pointer">
+              <input v-model="genMode" type="radio" value="merged" class="accent-[var(--f-accent)]">
+              <span>合并生成</span>
+            </label>
+            <label class="flex items-center gap-1 cursor-pointer">
+              <input v-model="genMode" type="radio" value="sequential" class="accent-[var(--f-accent)]">
+              <span>独立生成</span>
+            </label>
+          </div>
+          <p v-if="genMode === 'merged' && settingsStore.settings.Zsections.length > 3" class="text-[10px] text-[var(--f-danger)] mt-1">
+            <i class="fa-solid fa-triangle-exclamation"></i> 板块超过3个时，合并生成可能不可靠，建议使用独立生成
+          </p>
+        </div>
+        <div v-if="genMode !== 'single'">
+          <label class="text-[11px] text-[var(--f-text-secondary)] block mb-1">选择板块</label>
+          <div class="flex flex-wrap gap-2 text-[11px]">
+            <label v-for="sec in settingsStore.settings.Zsections" :key="sec.id" class="flex items-center gap-1 cursor-pointer">
+              <input
+                v-model="selectedSections"
+                type="checkbox"
+                :value="sec.id"
+                class="accent-[var(--f-accent)]"
+              >
+              <span>{{ sec.name }}</span>
+            </label>
+          </div>
+        </div>
         <div>
           <label class="text-[11px] text-[var(--f-text-secondary)] block mb-1">讨论方向 / 话题关键词（可选，留空则由 AI 自由发挥）</label>
           <textarea
@@ -99,14 +133,11 @@
             placeholder="例如：最近更新的新副本、PK大赛、装备强化黑幕、生活玩家日常…&#10;多个话题可以用逗号或换行分隔"
           ></textarea>
         </div>
-        <div>
-          <label class="text-[11px] text-[var(--f-text-secondary)] block mb-1">板块：{{ forumStore.activeSectionName }}</label>
-        </div>
       </div>
       <button
         class="w-full text-xs text-white py-2 rounded disabled:opacity-50 mt-2 flex items-center justify-center gap-1 transition-colors"
         :class="forumStore.isGenerating ? 'bg-[var(--f-bg-input)] cursor-wait' : 'bg-[var(--f-accent-bg)] hover:bg-[var(--f-accent-bg-hover)]'"
-        :disabled="forumStore.isGenerating"
+        :disabled="forumStore.isGenerating || (genMode !== 'single' && selectedSections.length === 0)"
         @click="handleBatchGenerate"
       >
         <i v-if="forumStore.isGenerating" class="fa-solid fa-spinner fa-spin"></i>
@@ -120,10 +151,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, inject, computed } from 'vue';
+import { ref, inject, computed, watch } from 'vue';
 import type { ForumPost, ForumComment } from './types';
 import { useForumSettingsStore, useForumUiStore } from './settings';
-import { generatePosts, generateComments, injectForumContext } from './aiGenerator';
+import { generatePosts, generatePostsMerged, generatePostsSequential, generateComments, injectForumContext } from './aiGenerator';
 import ForumTabs from './ForumTabs.vue';
 import PostList from './PostList.vue';
 import PostDetail from './PostDetail.vue';
@@ -135,6 +166,8 @@ const forumStore = useForumUiStore();
 
 const showSettings = ref(false);
 const genTopic = ref('');
+const genMode = ref<'single' | 'merged' | 'sequential'>('single');
+const selectedSections = ref<string[]>([forumStore.activeSection]);
 
 const bgImageStyle = computed(() => ({
   backgroundImage: `url(${settingsStore.settings.ZbgImage})`,
@@ -179,16 +212,38 @@ function requestClose() {
   if (windowControls) windowControls.requestClose = true;
 }
 
+function openGenDialog() {
+  genMode.value = 'single';
+  selectedSections.value = [forumStore.activeSection];
+  forumStore.openGenDialog();
+}
+
 async function handleBatchGenerate() {
   forumStore.isGenerating = true;
   try {
     const topic = genTopic.value.trim() || undefined;
-    const posts = await generatePosts(forumStore.activeSection, topic);
-    for (const post of posts) {
-      settingsStore.addPost(post);
+    let resultMap: Record<string, ForumPost[]>;
+
+    if (genMode.value === 'single') {
+      const posts = await generatePosts(forumStore.activeSection, topic);
+      resultMap = { [forumStore.activeSection]: posts };
+    } else if (genMode.value === 'merged') {
+      const sections = selectedSections.value.length > 0 ? selectedSections.value : [forumStore.activeSection];
+      resultMap = await generatePostsMerged(sections, topic);
+    } else {
+      const sections = selectedSections.value.length > 0 ? selectedSections.value : [forumStore.activeSection];
+      resultMap = await generatePostsSequential(sections, topic);
+    }
+
+    let totalCount = 0;
+    for (const [sectionId, posts] of Object.entries(resultMap)) {
+      for (const post of posts) {
+        settingsStore.addPost(post);
+      }
+      totalCount += posts.length;
     }
     injectForumContext();
-    toastr.success(`AI生成了${posts.length}个帖子`);
+    toastr.success(`AI生成了${totalCount}个帖子`);
     forumStore.closeGenDialog();
     genTopic.value = '';
   } catch (e) {

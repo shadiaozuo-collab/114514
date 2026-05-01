@@ -63,37 +63,28 @@ export function postBatchSchema(postCount: number, commentCount: number) {
   };
 }
 
-export function bothSectionsBatchSchema(postCount: number, commentCount: number) {
+export function mergedSectionsBatchSchema(sectionIds: string[], postCount: number, commentCount: number) {
   const item = makePostItemSchema(commentCount);
-  return {
-    name: 'forum_posts_both_sections',
-    value: {
+  const properties: Record<string, any> = {};
+  for (const id of sectionIds) {
+    properties[id] = {
       type: 'object',
       properties: {
-        A: {
-          type: 'object',
-          properties: {
-            posts: {
-              type: 'array',
-              description: `板块A的帖子列表，${postCount}个左右`,
-              items: item,
-            },
-          },
-          required: ['posts'],
-        },
-        B: {
-          type: 'object',
-          properties: {
-            posts: {
-              type: 'array',
-              description: `板块B的帖子列表，${postCount}个左右`,
-              items: item,
-            },
-          },
-          required: ['posts'],
+        posts: {
+          type: 'array',
+          description: `板块${id}的帖子列表，${postCount}个左右`,
+          items: item,
         },
       },
-      required: ['A', 'B'],
+      required: ['posts'],
+    };
+  }
+  return {
+    name: 'forum_posts_merged_sections',
+    value: {
+      type: 'object',
+      properties,
+      required: sectionIds,
     },
   };
 }
@@ -160,10 +151,10 @@ function buildCustomApi(settings: any): Record<string, any> {
   return customApi;
 }
 
-function parseRawPosts(rawPosts: any[], section: 'A' | 'B', sourceMessageIndex?: number): ForumPost[] {
+function parseRawPosts(rawPosts: any[], sectionId: string, sourceMessageIndex?: number): ForumPost[] {
   return (rawPosts || []).map((post: any) => ({
     id: generateId(),
-    section,
+    section: sectionId,
     title: post.title || '无标题',
     content: post.content || '',
     authorId: post.authorId || '匿名用户',
@@ -214,7 +205,7 @@ function safeJsonParse(raw: string): any {
   }
 }
 
-function recordPostIdsToMessage(postsA: ForumPost[], postsB: ForumPost[]) {
+function recordPostIdsToMessage(postsMap: Record<string, ForumPost[]>) {
   try {
     const ctx = SillyTavern.getContext();
     const chat = ctx.chat;
@@ -222,25 +213,25 @@ function recordPostIdsToMessage(postsA: ForumPost[], postsB: ForumPost[]) {
     const lastMsg = chat[chat.length - 1];
     if (lastMsg.is_user) return;
     lastMsg.extra = lastMsg.extra || {};
-    lastMsg.extra.zsdForumGeneration = {
-      at: Date.now(),
-      postsA: postsA.map(p => p.id),
-      postsB: postsB.map(p => p.id),
-    };
+    const posts: Record<string, string[]> = {};
+    for (const [sectionId, sectionPosts] of Object.entries(postsMap)) {
+      posts[sectionId] = sectionPosts.map(p => p.id);
+    }
+    lastMsg.extra.zsdForumGeneration = { at: Date.now(), posts };
   } catch (e) {
     console.warn('[网游论坛] 记录帖子关联失败:', e);
   }
 }
 
-export async function generatePosts(section: 'A' | 'B', topic?: string) {
+export async function generatePosts(sectionId: string, topic?: string) {
   const store = useForumSettingsStore();
   const { settings } = store;
-  const promptKey = store.getPromptKey(section);
-  const sectionName = store.getSectionName(section);
+  const sectionName = store.getSectionName(sectionId);
+  const promptBase = store.getSectionPrompt(sectionId);
   const postCount = settings.ZpostCountHint;
   const commentCount = settings.ZcommentCountHint;
   const systemPrompt = buildSystemPrompt(
-    settings[promptKey as 'Zprompt_A' | 'Zprompt_B'],
+    promptBase,
     settings.ZoutputFormat,
     settings.ZdecentralizedMode,
     settings.ZauthorIdPrompt,
@@ -279,50 +270,43 @@ export async function generatePosts(section: 'A' | 'B', topic?: string) {
       });
 
   const parsed = safeJsonParse(result as string);
-  const posts = parseRawPosts(parsed.posts || [], section, SillyTavern.getContext().chat.length - 1);
-  recordPostIdsToMessage(section === 'A' ? posts : [], section === 'B' ? posts : []);
+  const posts = parseRawPosts(parsed.posts || [], sectionId, SillyTavern.getContext().chat.length - 1);
+  recordPostIdsToMessage({ [sectionId]: posts });
   return posts;
 }
 
-export async function generatePostsForBothSections(topic?: string) {
+export async function generatePostsMerged(sectionIds: string[], topic?: string) {
   const store = useForumSettingsStore();
   const { settings } = store;
   const postCount = settings.ZpostCountHint;
   const commentCount = settings.ZcommentCountHint;
-  const sectionAName = store.getSectionName('A');
-  const sectionBName = store.getSectionName('B');
 
-  const systemPromptA = buildSystemPrompt(
-    settings.Zprompt_A,
-    settings.ZoutputFormat,
-    settings.ZdecentralizedMode,
-    settings.ZauthorIdPrompt,
-    settings.ZplayerForumId,
-    postCount,
-    commentCount,
-  );
-  const systemPromptB = buildSystemPrompt(
-    settings.Zprompt_B,
-    settings.ZoutputFormat,
-    settings.ZdecentralizedMode,
-    settings.ZauthorIdPrompt,
-    settings.ZplayerForumId,
-    postCount,
-    commentCount,
-  );
+  const sectionPrompts: string[] = [];
+  for (const id of sectionIds) {
+    const name = store.getSectionName(id);
+    const prompt = store.getSectionPrompt(id);
+    const sp = buildSystemPrompt(
+      prompt,
+      settings.ZoutputFormat,
+      settings.ZdecentralizedMode,
+      settings.ZauthorIdPrompt,
+      settings.ZplayerForumId,
+      postCount,
+      commentCount,
+    );
+    sectionPrompts.push(`【板块${id}：${name}】\n${sp}`);
+  }
 
-  const combinedSystemPrompt = `【板块A：${sectionAName}】\n${systemPromptA}\n\n【板块B：${sectionBName}】\n${systemPromptB}\n\n【重要说明】请分别为上述两个板块生成帖子。输出JSON中必须包含 A 和 B 两个键，每个键下包含 posts 数组。两个板块的帖子风格、主题和语气必须严格对应各自的板块要求，不要混淆。`;
+  const combinedSystemPrompt = `${sectionPrompts.join('\n\n')}\n\n【重要说明】请分别为上述${sectionIds.length}个板块生成帖子。输出JSON中必须包含 ${sectionIds.join('、')} 键，每个键下包含 posts 数组。各板块的帖子风格、主题和语气必须严格对应各自的板块要求，不要混淆。`;
 
   const topicHint = topic?.trim() ? `\n本次讨论方向/话题：${topic.trim()}` : '';
 
-  const userInput = `请分别为以下两个板块批量生成帖子：
-
-板块"${sectionAName}"：生成${postCount}个左右的帖子，每个帖子附带${commentCount}条左右的评论。
-
-板块"${sectionBName}"：生成${postCount}个左右的帖子，每个帖子附带${commentCount}条左右的评论。
-
-请确保两个板块的帖子风格严格区分，各自对应板块的设定要求。${topicHint}
-以JSON格式返回，结构为 { "A": { "posts": [...] }, "B": { "posts": [...] } }。每个帖子包含 title、content、authorId、timestamp、comments 字段。`;
+  let userInput = `请分别为以下${sectionIds.length}个板块批量生成帖子：\n\n`;
+  for (const id of sectionIds) {
+    const name = store.getSectionName(id);
+    userInput += `板块"${name}"：生成${postCount}个左右的帖子，每个帖子附带${commentCount}条左右的评论。\n\n`;
+  }
+  userInput += `请确保各板块的帖子风格严格区分，各自对应板块的设定要求。${topicHint}\n以JSON格式返回，结构为 { ${sectionIds.map(id => `"${id}": { "posts": [...] }`).join(', ')} }。每个帖子包含 title、content、authorId、timestamp、comments 字段。`;
 
   const customApi = buildCustomApi(settings);
   const hasCustomApi = Object.keys(customApi).length > 0;
@@ -332,7 +316,7 @@ export async function generatePostsForBothSections(topic?: string) {
         user_input: userInput,
         should_silence: true,
         custom_api: hasCustomApi ? customApi : undefined,
-        json_schema: bothSectionsBatchSchema(postCount, commentCount),
+        json_schema: mergedSectionsBatchSchema(sectionIds, postCount, commentCount),
         max_chat_history: settings.ZinjectChatHistoryCount,
         injects: [{ role: 'system', content: combinedSystemPrompt, position: 'in_chat', depth: 0, should_scan: true }],
       })
@@ -340,7 +324,7 @@ export async function generatePostsForBothSections(topic?: string) {
         user_input: userInput,
         should_silence: true,
         custom_api: hasCustomApi ? customApi : undefined,
-        json_schema: bothSectionsBatchSchema(postCount, commentCount),
+        json_schema: mergedSectionsBatchSchema(sectionIds, postCount, commentCount),
         max_chat_history: settings.ZinjectChatHistoryCount,
         ordered_prompts: [
           'world_info_before',
@@ -353,19 +337,30 @@ export async function generatePostsForBothSections(topic?: string) {
 
   const parsed = safeJsonParse(result as string);
   const sourceIndex = SillyTavern.getContext().chat.length - 1;
-  const postsA = parseRawPosts(parsed.A?.posts || [], 'A', sourceIndex);
-  const postsB = parseRawPosts(parsed.B?.posts || [], 'B', sourceIndex);
-  recordPostIdsToMessage(postsA, postsB);
-  return { A: postsA, B: postsB };
+  const resultMap: Record<string, ForumPost[]> = {};
+  for (const id of sectionIds) {
+    resultMap[id] = parseRawPosts(parsed[id]?.posts || [], id, sourceIndex);
+  }
+  recordPostIdsToMessage(resultMap);
+  return resultMap;
 }
 
-export async function generateComments(section: 'A' | 'B', post: ForumPost) {
+/** 独立模式：逐个板块单独生成 */
+export async function generatePostsSequential(sectionIds: string[], topic?: string): Promise<Record<string, ForumPost[]>> {
+  const resultMap: Record<string, ForumPost[]> = {};
+  for (const id of sectionIds) {
+    resultMap[id] = await generatePosts(id, topic);
+  }
+  return resultMap;
+}
+
+export async function generateComments(sectionId: string, post: ForumPost) {
   const store = useForumSettingsStore();
   const { settings } = store;
-  const promptKey = store.getPromptKey(section);
+  const promptBase = store.getSectionPrompt(sectionId);
   const commentCount = settings.ZcommentCountHint;
   const systemPrompt = buildSystemPrompt(
-    settings[promptKey as 'Zprompt_A' | 'Zprompt_B'],
+    promptBase,
     settings.ZoutputFormat,
     settings.ZdecentralizedMode,
     settings.ZauthorIdPrompt,
@@ -421,11 +416,10 @@ export function injectForumContext() {
   const { settings } = store;
   if (!settings.ZenableInjectToChat) return;
 
-  const sections: ('A' | 'B')[] = ['A', 'B'];
   const parts: string[] = [];
-  for (const sec of sections) {
-    const posts = settings.Zposts[sec];
-    const name = store.getSectionName(sec);
+  for (const sec of settings.Zsections) {
+    const posts = settings.Zposts[sec.id] || [];
+    const name = sec.name;
     const ctx = buildContext(settings.ZforumName, name, posts, settings.ZinjectPostCount);
     if (ctx) parts.push(ctx);
   }
