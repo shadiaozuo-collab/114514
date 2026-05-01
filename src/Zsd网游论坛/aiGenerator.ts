@@ -250,7 +250,6 @@ export async function generatePosts(sectionId: string, topic?: string) {
         user_input: userInput,
         should_silence: true,
         custom_api: hasCustomApi ? customApi : undefined,
-        json_schema: settings.ZuseJsonSchema ? postBatchSchema(postCount, commentCount) : undefined,
         max_chat_history: settings.ZinjectChatHistoryCount,
         injects: [{ role: 'system', content: systemPrompt, position: 'in_chat', depth: 0, should_scan: true }],
       })
@@ -258,7 +257,6 @@ export async function generatePosts(sectionId: string, topic?: string) {
         user_input: userInput,
         should_silence: true,
         custom_api: hasCustomApi ? customApi : undefined,
-        json_schema: settings.ZuseJsonSchema ? postBatchSchema(postCount, commentCount) : undefined,
         max_chat_history: settings.ZinjectChatHistoryCount,
         ordered_prompts: [
           'world_info_before',
@@ -316,7 +314,6 @@ export async function generatePostsMerged(sectionIds: string[], topic?: string) 
         user_input: userInput,
         should_silence: true,
         custom_api: hasCustomApi ? customApi : undefined,
-        json_schema: settings.ZuseJsonSchema ? mergedSectionsBatchSchema(sectionIds, postCount, commentCount) : undefined,
         max_chat_history: settings.ZinjectChatHistoryCount,
         injects: [{ role: 'system', content: combinedSystemPrompt, position: 'in_chat', depth: 0, should_scan: true }],
       })
@@ -324,7 +321,6 @@ export async function generatePostsMerged(sectionIds: string[], topic?: string) 
         user_input: userInput,
         should_silence: true,
         custom_api: hasCustomApi ? customApi : undefined,
-        json_schema: settings.ZuseJsonSchema ? mergedSectionsBatchSchema(sectionIds, postCount, commentCount) : undefined,
         max_chat_history: settings.ZinjectChatHistoryCount,
         ordered_prompts: [
           'world_info_before',
@@ -378,7 +374,6 @@ export async function generateComments(sectionId: string, post: ForumPost) {
         user_input: userInput,
         should_silence: true,
         custom_api: hasCustomApi ? customApi : undefined,
-        json_schema: settings.ZuseJsonSchema ? commentSchema(commentCount) : undefined,
         max_chat_history: settings.ZinjectChatHistoryCount,
         injects: [{ role: 'system', content: systemPrompt, position: 'in_chat', depth: 0, should_scan: true }],
       })
@@ -386,7 +381,6 @@ export async function generateComments(sectionId: string, post: ForumPost) {
         user_input: userInput,
         should_silence: true,
         custom_api: hasCustomApi ? customApi : undefined,
-        json_schema: settings.ZuseJsonSchema ? commentSchema(commentCount) : undefined,
         max_chat_history: settings.ZinjectChatHistoryCount,
         ordered_prompts: [
           'world_info_before',

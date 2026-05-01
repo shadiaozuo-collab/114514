@@ -119,7 +119,6 @@ const SettingsSchema = z.object({
   ZpostCountHint: z.coerce.number().default(3),
   ZcommentCountHint: z.coerce.number().default(3),
   ZdecentralizedMode: z.boolean().default(false),
-  ZuseJsonSchema: z.boolean().default(true),
   Zposts: z.record(z.string(), z.array(PostSchema)).default({ A: [], B: [] }),
   ZenableInjectToChat: z.boolean().default(true),
   ZinjectPostCount: z.coerce.number().default(5),
