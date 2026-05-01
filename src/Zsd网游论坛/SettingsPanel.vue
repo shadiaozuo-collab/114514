@@ -416,6 +416,7 @@ const themes = [
   { value: 'vaporwave', label: '蒸汽波', previewBg: '#1a0a2e', previewText: '#ff71ce' },
   { value: 'terminal', label: '终端绿', previewBg: '#0a0a0a', previewText: '#33ff33' },
   { value: 'light', label: '简约白', previewBg: '#f3f4f6', previewText: '#111827' },
+  { value: 'parchment', label: '羊皮纸', previewBg: '#f5f0e6', previewText: '#4a3728' },
   { value: 'custom', label: '自定义', previewBg: '#374151', previewText: '#fbbf24' },
 ];
 

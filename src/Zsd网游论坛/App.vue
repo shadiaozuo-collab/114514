@@ -353,6 +353,27 @@ async function triggerAutoAiReply(postId: string) {
   --f-danger: #dc2626;
   --f-danger-bg: #fee2e2;
 }
+.theme-parchment {
+  --f-bg: #f5f0e6;
+  --f-bg-card: #ebe4d4;
+  --f-bg-input: #e0d6c2;
+  --f-bg-hover: #d8cdb5;
+  --f-text: #4a3728;
+  --f-text-secondary: #7a6550;
+  --f-text-muted: #a09078;
+  --f-border: #d4c5a9;
+  --f-border-hover: #c4b599;
+  --f-accent: #8b6914;
+  --f-accent-bg: #8b6914;
+  --f-accent-bg-hover: #a07820;
+  --f-accent-dim: #f0e6d0;
+  --f-author: #5a7a3a;
+  --f-danger: #b54a3a;
+  --f-danger-bg: #f5e0dc;
+}
+.theme-parchment .forum-window {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.035'/%3E%3C/svg%3E");
+}
 .forum-window {
   width: 100%;
   height: 100%;
