@@ -417,6 +417,7 @@ const themes = [
   { value: 'terminal', label: '终端绿', previewBg: '#0a0a0a', previewText: '#33ff33' },
   { value: 'light', label: '简约白', previewBg: '#f3f4f6', previewText: '#111827' },
   { value: 'parchment', label: '羊皮纸', previewBg: '#f5f0e6', previewText: '#4a3728' },
+  { value: 'dark-gold', label: '暗金', previewBg: '#0d0d0d', previewText: '#c9a84c' },
   { value: 'custom', label: '自定义', previewBg: '#374151', previewText: '#fbbf24' },
 ];
 

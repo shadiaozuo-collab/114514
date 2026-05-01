@@ -381,6 +381,34 @@ async function triggerAutoAiReply(postId: string) {
 .theme-light .forum-window {
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.8);
 }
+.theme-dark-gold {
+  --f-bg: #0d0d0d;
+  --f-bg-card: #171714;
+  --f-bg-input: #252520;
+  --f-bg-hover: #33332c;
+  --f-text: #e8dcc8;
+  --f-text-secondary: #a09078;
+  --f-text-muted: #6b5e4e;
+  --f-border: #3a3020;
+  --f-border-hover: #5a4a30;
+  --f-accent: #c9a84c;
+  --f-accent-bg: #b08d38;
+  --f-accent-bg-hover: #c9a84c;
+  --f-accent-dim: #2a2410;
+  --f-author: #d4a574;
+  --f-danger: #b54a3a;
+  --f-danger-bg: #3d1a14;
+}
+.theme-dark-gold .forum-window {
+  box-shadow:
+    inset 0 1px 0 rgba(201,168,76,0.08),
+    inset 0 -1px 0 rgba(0,0,0,0.4);
+}
+.theme-dark-gold .fa-solid,
+.theme-dark-gold .fa-robot {
+  color: var(--f-accent);
+  text-shadow: 0 0 6px rgba(201,168,76,0.25);
+}
 .theme-parchment {
   --f-bg: #ddd5c5;
   --f-bg-card: #d0c8b8;
