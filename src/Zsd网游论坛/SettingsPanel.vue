@@ -173,6 +173,13 @@
         </div>
       </div>
       <div class="flex items-center gap-2">
+        <input v-model="store.settings.ZuseJsonSchema" type="checkbox" class="accent-blue-500" />
+        <div>
+          <label class="text-[11px] text-[var(--f-text-secondary)]">使用 JSON Schema 强制输出格式</label>
+          <p class="text-[10px]" :style="{ color: 'var(--f-text-muted)' }">关闭后兼容不支持结构化输出的模型（如 Claude、部分第三方代理）。关闭后 AI 可能不严格按 JSON 返回。</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
         <input v-model="store.settings.ZautoAiReply" type="checkbox" class="accent-blue-500" />
         <div>
           <label class="text-[11px] text-[var(--f-text-secondary)]">自动AI回复</label>
