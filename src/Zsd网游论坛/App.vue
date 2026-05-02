@@ -27,11 +27,21 @@
     <!-- 全局生成中提示 -->
     <div
       v-if="forumStore.isGenerating"
-      class="shrink-0 flex items-center justify-center gap-1.5 py-1 px-2 text-[10px] font-medium"
+      class="shrink-0 flex items-center justify-between gap-1.5 py-1 px-2 text-[10px] font-medium"
       :style="{ backgroundColor: 'var(--f-accent-bg)', color: '#fff' }"
     >
-      <i class="fa-solid fa-spinner fa-spin"></i>
-      <span>AI 正在生成内容，请稍候…</span>
+      <div class="flex items-center gap-1.5">
+        <i class="fa-solid fa-spinner fa-spin"></i>
+        <span>AI 正在生成内容，请稍候…</span>
+        <span v-if="forumStore.generationElapsed > 0" class="opacity-80">({{ forumStore.generationElapsed }}s)</span>
+      </div>
+      <button
+        class="px-1.5 py-0.5 rounded text-[10px] font-bold hover:opacity-80 transition-opacity"
+        :style="{ backgroundColor: 'var(--f-danger)', color: '#fff' }"
+        @click="forumStore.abortGeneration()"
+      >
+        <i class="fa-solid fa-stop"></i> 终止
+      </button>
     </div>
     <ForumTabs
       :active-section="forumStore.activeSection"
@@ -299,6 +309,7 @@ function openGenDialog() {
 
 async function handleBatchGenerate() {
   forumStore.isGenerating = true;
+  forumStore.startGenerationTimer();
   try {
     const topic = genTopic.value.trim() || undefined;
     let resultMap: Record<string, ForumPost[]>;
@@ -329,12 +340,14 @@ async function handleBatchGenerate() {
     toastr.error(`生成帖子失败: ${e instanceof Error ? e.message : String(e)}`);
   } finally {
     forumStore.isGenerating = false;
+    forumStore.stopGenerationTimer();
   }
 }
 
 async function handleGenerateComments() {
   if (!forumStore.selectedPost) return;
   forumStore.isGenerating = true;
+  forumStore.startGenerationTimer();
   try {
     const comments = await generateComments(forumStore.activeSection, forumStore.selectedPost);
     for (const comment of comments) {
@@ -346,6 +359,7 @@ async function handleGenerateComments() {
     toastr.error(`生成评论失败: ${e instanceof Error ? e.message : String(e)}`);
   } finally {
     forumStore.isGenerating = false;
+    forumStore.stopGenerationTimer();
   }
 }
 
@@ -377,6 +391,7 @@ async function triggerAutoAiReply(postId: string) {
   const post = settingsStore.settings.Zposts[forumStore.activeSection].find(p => p.id === postId);
   if (!post) return;
   forumStore.isGenerating = true;
+  forumStore.startGenerationTimer();
   try {
     const comments = await generateComments(forumStore.activeSection, post);
     for (const comment of comments) {
@@ -389,6 +404,7 @@ async function triggerAutoAiReply(postId: string) {
     toastr.error(`自动AI回复失败：${e?.message || e}`);
   } finally {
     forumStore.isGenerating = false;
+    forumStore.stopGenerationTimer();
   }
 }
 </script>

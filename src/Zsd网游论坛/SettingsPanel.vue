@@ -198,7 +198,11 @@
       </div>
       <div>
         <label class="text-[11px] text-[var(--f-text-secondary)] block mb-1">模型名（留空使用酒馆当前模型）</label>
-        <input v-model="store.settings.Zmodel" class="w-full text-xs px-2 py-1.5 rounded outline-none border focus:border-[var(--f-accent)]" :style="inputStyle" placeholder="如: gpt-4o-mini" />
+        <input v-model="store.settings.Zmodel" list="model-suggestions" class="w-full text-xs px-2 py-1.5 rounded outline-none border focus:border-[var(--f-accent)]" :style="inputStyle" placeholder="如: gpt-4o-mini" />
+        <datalist id="model-suggestions">
+          <option v-for="m in suggestedModels" :key="m" :value="m">{{ m }}</option>
+        </datalist>
+        <p class="text-[10px] mt-0.5" :style="{ color: 'var(--f-text-muted)' }">根据 API 源或地址自动推荐模型，也可直接输入未列出的新模型</p>
       </div>
       <div>
         <label class="text-[11px] text-[var(--f-text-secondary)] block mb-1">代理预设名（优先使用）</label>
@@ -433,6 +437,28 @@ function deletePreset() {
     toastr.success(`已删除预设: ${name}`);
   }
 }
+
+const MODEL_SUGGESTIONS: Record<string, string[]> = {
+  openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'o1', 'o3-mini', 'o1-mini'],
+  claude: ['claude-3-5-sonnet', 'claude-3-opus', 'claude-3-haiku', 'claude-3-5-sonnet-20241022'],
+  deepseek: ['deepseek-chat', 'deepseek-reasoner', 'deepseek-v4-pro', 'deepseek-v4-flash'],
+  gemini: ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-2.0-flash'],
+  azure: ['gpt-4o', 'gpt-4o-mini', 'gpt-4'],
+};
+
+const suggestedModels = computed(() => {
+  const source = (store.settings.ZapiSource || '').toLowerCase().trim();
+  const url = (store.settings.ZapiUrl || '').toLowerCase();
+  if (source && MODEL_SUGGESTIONS[source]) {
+    return MODEL_SUGGESTIONS[source];
+  }
+  if (url.includes('deepseek')) return MODEL_SUGGESTIONS.deepseek;
+  if (url.includes('openai') || url.includes('chatgpt')) return MODEL_SUGGESTIONS.openai;
+  if (url.includes('anthropic') || url.includes('claude')) return MODEL_SUGGESTIONS.claude;
+  if (url.includes('gemini') || url.includes('google')) return MODEL_SUGGESTIONS.gemini;
+  if (url.includes('azure')) return MODEL_SUGGESTIONS.azure;
+  return [];
+});
 
 const inputStyle = computed(() => ({
   backgroundColor: 'var(--f-bg-input)',

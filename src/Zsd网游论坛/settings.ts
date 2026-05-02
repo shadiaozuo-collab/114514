@@ -195,6 +195,9 @@ function migrateLegacySettings(vars: Record<string, any>) {
 }
 
 const varOption = { type: 'chat' as const };
+const globalVarOption = { type: 'global' as const };
+
+const API_CONFIG_KEYS = ['ZapiUrl', 'ZapiKey', 'ZapiSource', 'Zmodel', 'ZproxyPreset', 'ZapiPresets'] as const;
 
 // 禁用 registerVariableSchema：JS-Slash-Runner 内嵌的 Zod 实现与标准 Zod 不兼容，
 // 会导致 schema 损坏并在后续变量访问时触发 `Cannot read properties of undefined (reading '_zod')` 错误。
@@ -209,9 +212,30 @@ export const useForumSettingsStore = defineStore('forum-settings', () => {
   function loadVars() {
     try {
       const vars = getVariables(varOption);
-      if (Object.keys(vars).some(k => k.startsWith('Z'))) return vars;
+      if (Object.keys(vars).some(k => k.startsWith('Z'))) {
+        // 同时尝试从全局变量加载 API 配置（优先全局）
+        try {
+          const globalVars = getVariables(globalVarOption);
+          for (const key of API_CONFIG_KEYS) {
+            if (globalVars[key] !== undefined) {
+              vars[key] = globalVars[key];
+            }
+          }
+        } catch {}
+        return vars;
+      }
       const scriptVars = getVariables({ type: 'script', script_id: getScriptId() });
-      if (Object.keys(scriptVars).some(k => k.startsWith('Z'))) return scriptVars;
+      if (Object.keys(scriptVars).some(k => k.startsWith('Z'))) {
+        try {
+          const globalVars = getVariables(globalVarOption);
+          for (const key of API_CONFIG_KEYS) {
+            if (globalVars[key] !== undefined) {
+              scriptVars[key] = globalVars[key];
+            }
+          }
+        } catch {}
+        return scriptVars;
+      }
     } catch {}
     return {};
   }
@@ -253,7 +277,14 @@ export const useForumSettingsStore = defineStore('forum-settings', () => {
 
   watchEffect(() => {
     if (suppressSync) return;
+    // 论坛数据保存到对话变量
     insertOrAssignVariables(klona(settings.value), varOption);
+    // API 配置保存到全局变量（跨对话共享）
+    const apiConfig: Record<string, any> = {};
+    for (const key of API_CONFIG_KEYS) {
+      apiConfig[key] = (settings.value as any)[key];
+    }
+    insertOrAssignVariables(apiConfig, globalVarOption);
   });
 
   function addPost(post: ForumPost) {
@@ -289,6 +320,7 @@ export const useForumSettingsStore = defineStore('forum-settings', () => {
       }
       return vars;
     }, varOption);
+    // 不清除全局 API 配置，让用户跨对话保留 API 设置
     Object.assign(settings.value, SettingsSchema.parse({}));
     toastr.success('论坛变量已清除');
   }
@@ -374,6 +406,11 @@ export const useForumSettingsStore = defineStore('forum-settings', () => {
 
   function forceSync() {
     insertOrAssignVariables(klona(settings.value), varOption);
+    const apiConfig: Record<string, any> = {};
+    for (const key of API_CONFIG_KEYS) {
+      apiConfig[key] = (settings.value as any)[key];
+    }
+    insertOrAssignVariables(apiConfig, globalVarOption);
   }
 
   return {
@@ -403,6 +440,9 @@ export const useForumUiStore = defineStore('forum-ui', () => {
   const showEditor = ref(false);
   const showGenDialog = ref(false);
   const editorMode = ref<'post' | 'comment'>('post');
+  const generationStartTime = ref<number>(0);
+  const generationElapsed = ref<number>(0);
+  let elapsedTimer: ReturnType<typeof setInterval> | null = null;
 
   const currentPosts = computed(() => settingsStore.settings.Zposts[activeSection.value] || []);
   const selectedPost = computed(() => {
@@ -451,6 +491,36 @@ export const useForumUiStore = defineStore('forum-ui', () => {
     showGenDialog.value = false;
   }
 
+  function startGenerationTimer() {
+    generationStartTime.value = Date.now();
+    generationElapsed.value = 0;
+    if (elapsedTimer) clearInterval(elapsedTimer);
+    elapsedTimer = setInterval(() => {
+      generationElapsed.value = Math.floor((Date.now() - generationStartTime.value) / 1000);
+    }, 1000);
+  }
+
+  function stopGenerationTimer() {
+    if (elapsedTimer) {
+      clearInterval(elapsedTimer);
+      elapsedTimer = null;
+    }
+  }
+
+  function abortGeneration() {
+    try {
+      const ctx = SillyTavern.getContext();
+      if (ctx.stopGeneration) {
+        ctx.stopGeneration();
+        toastr.info('[论坛] 已发送终止生成请求');
+      }
+    } catch (e) {
+      console.warn('[网游论坛] 终止生成失败:', e);
+    }
+    isGenerating.value = false;
+    stopGenerationTimer();
+  }
+
   return {
     activeSection,
     selectedPostId,
@@ -458,6 +528,8 @@ export const useForumUiStore = defineStore('forum-ui', () => {
     showEditor,
     showGenDialog,
     editorMode,
+    generationStartTime,
+    generationElapsed,
     currentPosts,
     selectedPost,
     activeSectionName,
@@ -470,5 +542,8 @@ export const useForumUiStore = defineStore('forum-ui', () => {
     closeEditor,
     openGenDialog,
     closeGenDialog,
+    startGenerationTimer,
+    stopGenerationTimer,
+    abortGeneration,
   };
 });

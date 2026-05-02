@@ -385,26 +385,30 @@ function setupAutoGenerate() {
   const endEvt = eventOn(tavern_events.GENERATION_ENDED, async () => {
     if (!app) return;
 
+    const store = useForumSettingsStore();
+    const uiStore = useForumUiStore();
+    const interval = store.settings.ZautoGenerateInterval;
+
     // [门控] 过滤 quiet / dryRun / automatic_trigger 等后台生成
     if (isQuietLikeGeneration(lastGenContext)) {
-      console.log(
-        `[网游论坛] 跳过本轮 GENERATION_ENDED (type=${lastGenContext?.type}, dryRun=${lastGenContext?.dryRun}, quiet=${!!lastGenContext?.quietPrompt})`,
-      );
+      const reason = `type=${lastGenContext?.type}, dryRun=${lastGenContext?.dryRun}, quiet=${!!lastGenContext?.quietPrompt}`;
+      console.log(`[网游论坛] 跳过本轮 GENERATION_ENDED (${reason})`);
       return;
     }
 
-    const store = useForumSettingsStore();
-    const uiStore = useForumUiStore();
-
-    // [门控] 如果上一轮自动生成还没结束，跳过（防止递归：我们的 generatePosts 也会触发 GENERATION_ENDED）
+    // [门控] 如果上一轮自动生成还没结束，跳过
     if (uiStore.isGenerating) {
       console.log('[网游论坛] 跳过 GENERATION_ENDED：论坛自动生成仍在执行中');
       return;
     }
-    const interval = store.settings.ZautoGenerateInterval;
-    if (interval === 0) return;
 
-    // [字数检测] AI回复过短则跳过，避免用截断/空回内容生成无效帖子
+    // [门控] 自动生成已关闭
+    if (interval === 0) {
+      console.log('[网游论坛] 跳过 GENERATION_ENDED：自动生成间隔为 0（已关闭）');
+      return;
+    }
+
+    // [字数检测] AI回复过短则跳过
     const minLen = store.settings.ZminReplyLength;
     if (minLen > 0) {
       const lastAiLen = getLastAiMessageLength();
@@ -416,56 +420,64 @@ function setupAutoGenerate() {
     }
 
     msgCount++;
+    const remaining = interval === -1 ? 0 : Math.max(0, interval - msgCount);
     console.log(`[网游论坛] GENERATION_ENDED 触发 msgCount=${msgCount}/${interval === -1 ? '每轮' : interval}`);
 
-    if (interval === -1 || msgCount >= interval) {
-      msgCount = 0;
-      uiStore.isGenerating = true;
-      const section = store.settings.ZautoGenerateSection;
-      const allSectionIds = store.settings.Zsections.map(s => s.id);
-      const isAll = section === 'all';
-      const targetSections = isAll ? allSectionIds : [section];
-      const sectionLabel = isAll ? '全部板块' : store.getSectionName(section);
-      console.log(`[网游论坛] 开始自动生成板块: ${sectionLabel}`);
-      toastr.info(`[论坛] 正在生成 ${sectionLabel} 帖子…`);
-      try {
-        if (targetSections.length === 1) {
-          const posts = await generatePosts(targetSections[0]);
-          for (const post of posts) {
-            store.addPost(post);
-          }
-          toastr.success(`[论坛] 自动生成完成：${posts.length}个帖子`);
-          console.log(`[网游论坛] 自动生成完成 ${posts.length}个帖子`);
-        } else if (store.settings.ZautoGenerateMode === 'merged') {
-          const result = await generatePostsMerged(targetSections);
-          let total = 0;
-          for (const [secId, posts] of Object.entries(result)) {
-            for (const post of posts) store.addPost(post);
-            total += posts.length;
-          }
-          const details = Object.entries(result).map(([k, v]) => `${store.getSectionName(k)}:${v.length}`).join(' ');
-          toastr.success(`[论坛] 自动生成完成：共${total}个帖子（${details}）`);
-          console.log(`[网游论坛] 自动生成完成 ${details}`);
-        } else {
-          const result = await generatePostsSequential(targetSections);
-          let total = 0;
-          for (const [secId, posts] of Object.entries(result)) {
-            for (const post of posts) store.addPost(post);
-            total += posts.length;
-          }
-          const details = Object.entries(result).map(([k, v]) => `${store.getSectionName(k)}:${v.length}`).join(' ');
-          toastr.success(`[论坛] 自动生成完成：共${total}个帖子（${details}）`);
-          console.log(`[网游论坛] 自动生成完成 ${details}`);
+    if (interval !== -1 && msgCount < interval) {
+      // 还没达到触发间隔，提示用户还需多少轮
+      toastr.info(`[论坛] 自动生成倒计时：还剩 ${remaining} 轮对话`);
+      return;
+    }
+
+    // 达到触发条件，开始生成
+    msgCount = 0;
+    uiStore.isGenerating = true;
+    uiStore.startGenerationTimer();
+    const section = store.settings.ZautoGenerateSection;
+    const allSectionIds = store.settings.Zsections.map(s => s.id);
+    const isAll = section === 'all';
+    const targetSections = isAll ? allSectionIds : [section];
+    const sectionLabel = isAll ? '全部板块' : store.getSectionName(section);
+    console.log(`[网游论坛] 开始自动生成板块: ${sectionLabel}`);
+    toastr.info(`[论坛] 正在生成 ${sectionLabel} 帖子…`);
+    try {
+      if (targetSections.length === 1) {
+        const posts = await generatePosts(targetSections[0]);
+        for (const post of posts) {
+          store.addPost(post);
         }
-        injectForumContext();
-      } catch (e: any) {
-        const errMsg = e?.message || String(e);
-        console.error('[网游论坛] 自动生成失败:', e);
-        toastr.error(`[论坛] 自动生成失败: ${errMsg}`);
-      } finally {
-        uiStore.isGenerating = false;
-        lastGenContext = null; // 清理上下文，避免 stale 数据
+        toastr.success(`[论坛] 自动生成完成：${posts.length}个帖子`);
+        console.log(`[网游论坛] 自动生成完成 ${posts.length}个帖子`);
+      } else if (store.settings.ZautoGenerateMode === 'merged') {
+        const result = await generatePostsMerged(targetSections);
+        let total = 0;
+        for (const [secId, posts] of Object.entries(result)) {
+          for (const post of posts) store.addPost(post);
+          total += posts.length;
+        }
+        const details = Object.entries(result).map(([k, v]) => `${store.getSectionName(k)}:${v.length}`).join(' ');
+        toastr.success(`[论坛] 自动生成完成：共${total}个帖子（${details}）`);
+        console.log(`[网游论坛] 自动生成完成 ${details}`);
+      } else {
+        const result = await generatePostsSequential(targetSections);
+        let total = 0;
+        for (const [secId, posts] of Object.entries(result)) {
+          for (const post of posts) store.addPost(post);
+          total += posts.length;
+        }
+        const details = Object.entries(result).map(([k, v]) => `${store.getSectionName(k)}:${v.length}`).join(' ');
+        toastr.success(`[论坛] 自动生成完成：共${total}个帖子（${details}）`);
+        console.log(`[网游论坛] 自动生成完成 ${details}`);
       }
+      injectForumContext();
+    } catch (e: any) {
+      const errMsg = e?.message || String(e);
+      console.error('[网游论坛] 自动生成失败:', e);
+      toastr.error(`[论坛] 自动生成失败: ${errMsg}`);
+    } finally {
+      uiStore.isGenerating = false;
+      uiStore.stopGenerationTimer();
+      lastGenContext = null;
     }
   });
 
