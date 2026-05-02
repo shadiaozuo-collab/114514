@@ -305,8 +305,9 @@ async function triggerAutoAiReply(postId: string) {
     }
     injectForumContext();
     toastr.success(`AI自动回复了${comments.length}条评论`);
-  } catch (e) {
+  } catch (e: any) {
     console.warn('[网游论坛] 自动AI回复失败:', e);
+    toastr.error(`自动AI回复失败：${e?.message || e}`);
   } finally {
     forumStore.isGenerating = false;
   }
