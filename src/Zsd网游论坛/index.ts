@@ -384,26 +384,13 @@ function setupAutoGenerate() {
     });
   });
 
-  const endEvt = eventOn(tavern_events.GENERATION_ENDED, async () => {
+  // 把异步逻辑从事件回调中抽离，避免阻塞 SillyTavern 事件系统（Firefox 可能对 async 回调行为不同）
+  async function runAutoGenerate() {
     if (!app) return;
 
     const store = useForumSettingsStore();
     const uiStore = useForumUiStore();
     const interval = store.settings.ZautoGenerateInterval;
-
-    // 从队列中弹出对应的 GENERATION_STARTED 上下文（FIFO 配对）
-    const genCtx = genCtxQueue.shift();
-    if (!genCtx) {
-      console.log('[网游论坛] 跳过 GENERATION_ENDED：没有匹配的 GENERATION_STARTED 上下文');
-      return;
-    }
-
-    // [门控] 过滤 quiet / dryRun / automatic_trigger 等后台生成
-    if (isQuietLikeGeneration(genCtx)) {
-      const reason = `type=${genCtx.type}, dryRun=${genCtx.dryRun}, quiet=${!!genCtx.quietPrompt}`;
-      console.log(`[网游论坛] 跳过本轮 GENERATION_ENDED (${reason})`);
-      return;
-    }
 
     // [门控] 如果上一轮自动生成还没结束，跳过
     if (uiStore.isGenerating) {
@@ -433,7 +420,6 @@ function setupAutoGenerate() {
     console.log(`[网游论坛] GENERATION_ENDED 触发 msgCount=${msgCount}/${interval === -1 ? '每轮' : interval}`);
 
     if (interval !== -1 && msgCount < interval) {
-      // 还没达到触发间隔，提示用户还需多少轮
       toastr.info(`[论坛] 自动生成倒计时：还剩 ${remaining} 轮对话`);
       return;
     }
@@ -487,6 +473,33 @@ function setupAutoGenerate() {
       uiStore.isGenerating = false;
       uiStore.stopGenerationTimer();
     }
+  }
+
+  const endEvt = eventOn(tavern_events.GENERATION_ENDED, () => {
+    if (!app) return;
+
+    // 防队列累积：如果 SillyTavern 某次 started 没有对应的 ended（或反之），队列会增长
+    if (genCtxQueue.length > 10) {
+      console.warn(`[网游论坛] genCtxQueue 累积超过10个，清理旧项。当前长度=${genCtxQueue.length}`);
+      while (genCtxQueue.length > 10) genCtxQueue.shift();
+    }
+
+    // 从队列中弹出对应的 GENERATION_STARTED 上下文（FIFO 配对）
+    const genCtx = genCtxQueue.shift();
+    if (!genCtx) {
+      console.log('[网游论坛] 跳过 GENERATION_ENDED：没有匹配的 GENERATION_STARTED 上下文');
+      return;
+    }
+
+    // [门控] 过滤 quiet / dryRun / automatic_trigger 等后台生成
+    if (isQuietLikeGeneration(genCtx)) {
+      const reason = `type=${genCtx.type}, dryRun=${genCtx.dryRun}, quiet=${!!genCtx.quietPrompt}`;
+      console.log(`[网游论坛] 跳过本轮 GENERATION_ENDED (${reason})`);
+      return;
+    }
+
+    // 启动独立异步任务，不阻塞事件回调
+    void runAutoGenerate();
   });
 
   autoGenCleanup = () => {
