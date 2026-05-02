@@ -26,7 +26,7 @@
         <div v-for="(sec, index) in store.settings.Zsections" :key="sec.id" class="border rounded p-2 space-y-1" :style="{ borderColor: 'var(--f-border)' }">
           <div class="flex items-center gap-1">
             <input v-model="sec.name" class="flex-1 text-xs px-2 py-1 rounded outline-none border focus:border-[var(--f-accent)]" :style="inputStyle" :placeholder="`板块${index + 1}名称`" />
-            <select v-model="sec.type" class="text-xs px-2 py-1 rounded outline-none border focus:border-[var(--f-accent)]" :style="inputStyle">
+            <select v-model="sec.type" class="text-xs px-2 py-1 rounded outline-none border focus:border-[var(--f-accent)]" :style="inputStyle" @change="onSectionTypeChange(sec)">
               <option value="forum">论坛</option>
               <option value="tournament">赛事</option>
               <option value="newspaper">报纸</option>
@@ -591,19 +591,63 @@ const defaultPrompts = computed(() => [
 ]);
 
 function copyText(text: string) {
-  navigator.clipboard.writeText(text).then(() => {
-    toastr.success('已复制到剪贴板');
-  }).catch(() => {
-    const el = document.createElement('textarea');
-    el.value = text;
-    el.style.position = 'fixed';
-    el.style.opacity = '0';
-    document.body.appendChild(el);
-    el.select();
-    document.execCommand('copy');
-    document.body.removeChild(el);
-    toastr.success('已复制到剪贴板');
-  });
+  // 尝试主窗口 Clipboard API（iframe 中可能无权限，父窗口可能有）
+  const tryClipboard = (target: any) => {
+    if (!target?.clipboard?.writeText) return Promise.reject(new Error('no clipboard'));
+    return target.clipboard.writeText(text);
+  };
+
+  tryClipboard(window.parent)
+    .catch(() => tryClipboard(window))
+    .then(() => {
+      toastr.success('已复制到剪贴板');
+    })
+    .catch(() => {
+      // fallback: execCommand
+      const el = document.createElement('textarea');
+      el.value = text;
+      el.setAttribute('readonly', '');
+      el.style.cssText = 'position:fixed;top:0;left:0;opacity:0;z-index:-1;';
+      document.body.appendChild(el);
+      el.focus();
+      el.select();
+      const success = document.execCommand('copy');
+      document.body.removeChild(el);
+      if (success) {
+        toastr.success('已复制到剪贴板');
+      } else {
+        toastr.error('复制失败，请手动选中下方文本复制');
+      }
+    });
+}
+
+const defaultPromptSet = new Set([
+  defaultPromptA.trim(),
+  defaultPromptB.trim(),
+  defaultPromptTournament.trim(),
+  defaultPromptNewspaper.trim(),
+  '',
+]);
+
+function onSectionTypeChange(sec: any) {
+  const current = (sec.prompt || '').trim();
+  // 只有当前提示词为空或是某个默认提示词时，才自动切换
+  if (!defaultPromptSet.has(current)) {
+    toastr.info('提示词已自定义，未自动切换。如需默认提示词请从备份中复制。');
+    return;
+  }
+  if (sec.type === 'tournament') {
+    sec.prompt = defaultPromptTournament;
+    toastr.success('已自动切换为赛事默认提示词');
+  } else if (sec.type === 'newspaper') {
+    sec.prompt = defaultPromptNewspaper;
+    toastr.success('已自动切换为报纸默认提示词');
+  } else {
+    // 论坛默认：如果有两个论坛板块，第一个用A第二个用B
+    const forumCount = store.settings.Zsections.filter((s: any) => s.id !== sec.id && s.type === 'forum').length;
+    sec.prompt = forumCount === 0 ? defaultPromptA : defaultPromptB;
+    toastr.success('已自动切换为论坛默认提示词');
+  }
 }
 
 function saveSettings() {
