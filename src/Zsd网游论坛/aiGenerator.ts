@@ -205,6 +205,8 @@ function buildSystemPrompt(
   postCount?: number,
   commentCount?: number,
   sectionType: 'forum' | 'tournament' | 'newspaper' = 'forum',
+  useJailbreak?: boolean,
+  jailbreakPrompt?: string,
 ) {
   let prompt = promptBase;
   if (outputFormat.trim()) prompt += '\n\n' + outputFormat.trim();
@@ -238,6 +240,11 @@ function buildSystemPrompt(
 4. 【观点自检】确认每个帖子的评论中包含至少两种不同的观点或立场
 5. 【ID自检】确认所有用户ID均不重复，且风格多样化
 </self_check>`;
+
+  // 附加破甲提示词
+  if (useJailbreak && jailbreakPrompt?.trim()) {
+    prompt += '\n\n' + jailbreakPrompt.trim();
+  }
 
   return prompt;
 }
@@ -314,6 +321,8 @@ export async function generatePosts(sectionId: string, topic?: string) {
     postCount,
     commentCount,
     sectionType,
+    settings.ZuseJailbreak,
+    settings.ZjailbreakPrompt,
   );
   const customApi = buildCustomApi(settings);
   const hasCustomApi = Object.keys(customApi).length > 0;
@@ -376,6 +385,8 @@ export async function generatePostsMerged(sectionIds: string[], topic?: string) 
       postCount,
       commentCount,
       type,
+      settings.ZuseJailbreak,
+      settings.ZjailbreakPrompt,
     );
     sectionPrompts.push(`【板块${id}（${type === 'tournament' ? '赛事' : type === 'newspaper' ? '报纸' : '论坛'}）：${name}】\n${sp}`);
   }
@@ -455,6 +466,9 @@ export async function generateComments(sectionId: string, post: ForumPost) {
     settings.ZplayerForumId,
     undefined,
     commentCount,
+    undefined,
+    settings.ZuseJailbreak,
+    settings.ZjailbreakPrompt,
   );
   const existingComments = post.comments.map(c => `${c.authorId}: ${c.content}`).join('\n');
   const customApi = buildCustomApi(settings);
