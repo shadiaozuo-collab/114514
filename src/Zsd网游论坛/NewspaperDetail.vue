@@ -48,7 +48,7 @@
               <span class="text-[10px] text-[var(--f-text-muted)]">{{ article.author }}</span>
             </div>
             <h3 class="text-xs font-bold text-[var(--f-text)] mb-1">{{ article.title }}</h3>
-            <p class="text-[11px] text-[var(--f-text-secondary)] line-clamp-4 whitespace-pre-wrap">{{ article.content }}</p>
+            <p class="text-[11px] text-[var(--f-text-secondary)] whitespace-pre-wrap leading-relaxed">{{ article.content }}</p>
           </div>
         </div>
 
