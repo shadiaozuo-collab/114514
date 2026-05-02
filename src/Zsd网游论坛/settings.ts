@@ -310,34 +310,34 @@ export const useForumSettingsStore = defineStore('forum-settings', () => {
   let suppressSync = false;
 
   function loadVars() {
+    let vars: Record<string, any> = {};
+
+    // 1. 优先从对话变量加载论坛数据
     try {
-      const vars = getVariables(varOption);
-      if (Object.keys(vars).some(k => k.startsWith('Z'))) {
-        // 同时尝试从全局变量加载 API 配置（优先全局）
-        try {
-          const globalVars = getVariables(globalVarOption);
-          for (const key of API_CONFIG_KEYS) {
-            if (globalVars[key] !== undefined) {
-              vars[key] = globalVars[key];
-            }
-          }
-        } catch {}
-        return vars;
-      }
-      const scriptVars = getVariables({ type: 'script', script_id: getScriptId() });
-      if (Object.keys(scriptVars).some(k => k.startsWith('Z'))) {
-        try {
-          const globalVars = getVariables(globalVarOption);
-          for (const key of API_CONFIG_KEYS) {
-            if (globalVars[key] !== undefined) {
-              scriptVars[key] = globalVars[key];
-            }
-          }
-        } catch {}
-        return scriptVars;
+      const chatVars = getVariables(varOption);
+      if (Object.keys(chatVars).some(k => k.startsWith('Z'))) {
+        vars = { ...chatVars };
+      } else {
+        // 回退到 script 变量
+        const scriptVars = getVariables({ type: 'script', script_id: getScriptId() });
+        if (Object.keys(scriptVars).some(k => k.startsWith('Z'))) {
+          vars = { ...scriptVars };
+        }
       }
     } catch {}
-    return {};
+
+    // 2. 始终从全局变量加载 API 配置（覆盖对话变量中的 API 配置，确保全局优先）
+    // 这样新聊天没有论坛数据时，API 配置仍然能从全局恢复
+    try {
+      const globalVars = getVariables(globalVarOption);
+      for (const key of API_CONFIG_KEYS) {
+        if (globalVars[key] !== undefined) {
+          vars[key] = globalVars[key];
+        }
+      }
+    } catch {}
+
+    return vars;
   }
 
   function safeParseSettings(raw: any) {
