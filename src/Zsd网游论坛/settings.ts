@@ -164,13 +164,21 @@ function migrateLegacySettings(vars: Record<string, any>) {
     }
   }
 
-  // Zposts 旧格式迁移（中文键名 → A/B）
+  // Zposts 旧格式迁移（中文键名 → A/B）+ 清理残留键
   if (result.Zposts && typeof result.Zposts === 'object') {
     const posts = result.Zposts as Record<string, any>;
     const migrated: Record<string, any> = {};
+    const validSectionIds = new Set(
+      Array.isArray(result.Zsections)
+        ? result.Zsections.map((s: any) => s.id)
+        : ['A', 'B'],
+    );
     for (const [key, value] of Object.entries(posts)) {
       const normalizedKey = key === '现实讨论' ? 'A' : key === '游戏中论坛' ? 'B' : key;
-      migrated[normalizedKey] = value;
+      // 只保留当前有效板块对应的帖子数据，清理残留键
+      if (validSectionIds.has(normalizedKey)) {
+        migrated[normalizedKey] = value;
+      }
     }
     result.Zposts = migrated;
   }
