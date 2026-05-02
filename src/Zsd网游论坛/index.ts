@@ -47,12 +47,12 @@ function openForum() {
 
   const $container = $('<div>').attr('script_id', SCRIPT_ID).css(isMobile ? {
     position: 'fixed',
-    bottom: '0',
+    bottom: '60px',
     left: '50%',
     transform: 'translateX(-50%)',
     width: '92vw',
     maxWidth: '480px',
-    height: '85vh',
+    height: '70vh',
     zIndex: '100000',
     border: '1px solid rgba(255,255,255,0.1)',
     borderRadius: '16px 16px 0 0',
