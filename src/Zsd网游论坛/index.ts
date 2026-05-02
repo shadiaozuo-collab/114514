@@ -3,7 +3,7 @@ import { createApp, reactive, watch } from 'vue';
 import { reloadOnChatChange, teleportStyle } from '@util/script';
 import App from './App.vue';
 import { useForumSettingsStore, useForumUiStore } from './settings';
-import { injectForumContext, uninjectForumContext, generatePosts, generatePostsMerged, generatePostsSequential } from './aiGenerator';
+import { injectForumContext, uninjectForumContext, generatePosts, generatePostsMerged, generatePostsSequential, cleanupOrphanPosts } from './aiGenerator';
 
 const themeColors: Record<string, { bg: string; text: string }> = {
   'classic-dark': { bg: '#1f2937', text: '#93c5fd' },
@@ -40,8 +40,28 @@ function isMobileDevice() {
 function openForum() {
   const isMobile = isMobileDevice();
 
-  // 强制清理：无论之前是否有窗口，都先彻底销毁再重建
-  closeForum();
+  // 如果论坛已存在只是被隐藏了，直接显示并刷新数据
+  if ($iframe && $iframe.parent().length) {
+    const $container = $iframe.parent();
+    if (!$container.is(':visible')) {
+      $container.show();
+      $('.zsd-forum-mobile-backdrop').show();
+      // 重新加载数据（修复可能的错误数据）
+      try {
+        const store = useForumSettingsStore();
+        store.reloadFromVars();
+      } catch {}
+      // 重新注入上下文和自动注入
+      injectForumContext();
+      if (!autoInjectCleanup) setupAutoInject();
+      return;
+    }
+    // 如果已经可见，不做任何事（避免重复打开）
+    return;
+  }
+
+  // 清理残留（理论上不应该有，但保险起见）
+  destroyForum();
   $(`[script_id="${SCRIPT_ID}"]`).remove();
   $('.zsd-forum-drag-overlay').remove();
 
@@ -141,7 +161,7 @@ function openForum() {
         backgroundColor: 'rgba(0,0,0,0.4)',
         userSelect: 'none',
         WebkitUserSelect: 'none',
-      }).on('click.zsdforum', () => closeForum())
+      }).on('click.zsdforum', () => hideForum())
     : null;
 
   $container.append($header).append($iframe).appendTo('body');
@@ -235,7 +255,7 @@ function openForum() {
     watch(() => windowControls.requestClose, v => {
       if (v) {
         windowControls.requestClose = false;
-        closeForum();
+        hideForum();
       }
     });
 
@@ -252,7 +272,31 @@ function openForum() {
   }
 }
 
-function closeForum() {
+/**
+ * 隐藏论坛面板（不销毁Vue应用和自动生成）
+ * 这是点击关闭按钮时的行为，保持后台自动生成运行
+ */
+function hideForum() {
+  if ($iframe) {
+    const $container = $iframe.parent();
+    $container.hide();
+  }
+  $('.zsd-forum-mobile-backdrop').hide();
+  // 隐藏时停止向聊天注入上下文（避免隐藏期间干扰主AI）
+  uninjectForumContext();
+  if (autoInjectCleanup) {
+    autoInjectCleanup();
+    autoInjectCleanup = null;
+  }
+  // 清理孤儿帖子
+  cleanupOrphanPosts();
+}
+
+/**
+ * 彻底销毁论坛（释放所有资源）
+ * 用于页面卸载等真正需要清理的场景
+ */
+function destroyForum() {
   $('.zsd-forum-mobile-backdrop').off('.zsdforum').remove();
   if ($iframe) {
     const $container = $iframe.parent();
@@ -303,54 +347,6 @@ function getLastAiMessageLength(): number {
     }
   } catch (e) {}
   return Infinity;
-}
-
-/** 扫描所有AI消息的extra，收集被引用的帖子ID，清理孤儿帖子 */
-function cleanupOrphanPosts() {
-  try {
-    const ctx = SillyTavern.getContext();
-    const chat = ctx.chat;
-    if (!chat) return;
-
-    const referencedIds = new Set<string>();
-    for (const msg of chat) {
-      if (msg.is_user) continue;
-      const gen = msg.extra?.zsdForumGeneration;
-      if (gen) {
-        // 兼容旧格式
-        gen.postsA?.forEach((id: string) => referencedIds.add(id));
-        gen.postsB?.forEach((id: string) => referencedIds.add(id));
-        // 新格式
-        if (gen.posts) {
-          for (const ids of Object.values(gen.posts)) {
-            (ids as string[]).forEach((id: string) => referencedIds.add(id));
-          }
-        }
-      }
-    }
-
-    const store = useForumSettingsStore();
-    let removed = 0;
-
-    for (const sectionId of Object.keys(store.settings.Zposts)) {
-      const posts = store.settings.Zposts[sectionId] || [];
-      const before = posts.length;
-      store.settings.Zposts[sectionId] = posts.filter(p => {
-        // 手动添加的帖子（无sourceMessageIndex）永远保留
-        if (p.sourceMessageIndex === undefined) return true;
-        // AI生成的帖子：只有被某条现存AI消息引用才保留
-        return referencedIds.has(p.id);
-      });
-      removed += before - store.settings.Zposts[sectionId].length;
-    }
-
-    if (removed > 0) {
-      console.log(`[网游论坛] 回退同步：清理了 ${removed} 个孤儿帖子`);
-      injectForumContext();
-    }
-  } catch (e) {
-    console.warn('[网游论坛] 清理孤儿帖子失败:', e);
-  }
 }
 
 function setupAutoGenerate() {
@@ -530,7 +526,7 @@ function registerExtensionMenuItem() {
         $btn.trigger('click');
       }
       if ($iframe && $iframe.parent().is(':visible')) {
-        closeForum();
+        hideForum();
       } else {
         openForum();
       }
@@ -546,7 +542,7 @@ $(() => {
   appendInexistentScriptButtons([{ name: '论坛', visible: true }]);
   eventOn(getButtonEvent('论坛'), () => {
     if ($iframe && $iframe.parent().is(':visible')) {
-      closeForum();
+      hideForum();
     } else {
       openForum();
     }
@@ -581,6 +577,6 @@ $(() => {
   });
 
   $(window).on('pagehide', () => {
-    closeForum();
+    destroyForum();
   });
 });

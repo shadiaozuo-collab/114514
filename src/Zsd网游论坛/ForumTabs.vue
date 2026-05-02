@@ -17,6 +17,13 @@
     </div>
     <div class="flex items-center px-1 gap-0.5 border-l border-[var(--f-border)] flex-shrink-0">
       <button
+        class="flex items-center justify-center w-6 h-6 rounded transition-colors text-[var(--f-text-muted)] hover:text-[var(--f-accent)] hover:bg-[var(--f-bg-hover)] bg-[var(--f-bg-input)]"
+        title="刷新数据"
+        @click="$emit('refresh')"
+      >
+        <i class="fa-solid fa-rotate-right text-[10px]"></i>
+      </button>
+      <button
         class="flex items-center justify-center w-6 h-6 rounded transition-colors text-[var(--f-text-muted)] hover:text-[var(--f-text)] hover:bg-[var(--f-bg-hover)] bg-[var(--f-bg-input)]"
         title="设置"
         @click="$emit('toggleSettings')"
@@ -39,7 +46,7 @@ import { computed } from 'vue';
 import { useForumSettingsStore } from './settings';
 
 defineProps<{ activeSection: string }>();
-defineEmits<{ switch: [sectionId: string]; toggleSettings: []; close: [] }>();
+defineEmits<{ switch: [sectionId: string]; toggleSettings: []; close: []; refresh: [] }>();
 
 const isMobile = ('ontouchstart' in window || navigator.maxTouchPoints > 0) && window.innerWidth <= 768;
 

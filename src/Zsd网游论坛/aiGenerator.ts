@@ -529,3 +529,51 @@ export function uninjectForumContext() {
     uninjectFn = null;
   }
 }
+
+/** 扫描所有AI消息的extra，收集被引用的帖子ID，清理孤儿帖子 */
+export function cleanupOrphanPosts() {
+  try {
+    const ctx = SillyTavern.getContext();
+    const chat = ctx.chat;
+    if (!chat) return;
+
+    const referencedIds = new Set<string>();
+    for (const msg of chat) {
+      if (msg.is_user) continue;
+      const gen = msg.extra?.zsdForumGeneration;
+      if (gen) {
+        // 兼容旧格式
+        gen.postsA?.forEach((id: string) => referencedIds.add(id));
+        gen.postsB?.forEach((id: string) => referencedIds.add(id));
+        // 新格式
+        if (gen.posts) {
+          for (const ids of Object.values(gen.posts)) {
+            (ids as string[]).forEach((id: string) => referencedIds.add(id));
+          }
+        }
+      }
+    }
+
+    const store = useForumSettingsStore();
+    let removed = 0;
+
+    for (const sectionId of Object.keys(store.settings.Zposts)) {
+      const posts = store.settings.Zposts[sectionId] || [];
+      const before = posts.length;
+      store.settings.Zposts[sectionId] = posts.filter(p => {
+        // 手动添加的帖子（无sourceMessageIndex）永远保留
+        if (p.sourceMessageIndex === undefined) return true;
+        // AI生成的帖子：只有被某条现存AI消息引用才保留
+        return referencedIds.has(p.id);
+      });
+      removed += before - store.settings.Zposts[sectionId].length;
+    }
+
+    if (removed > 0) {
+      console.log(`[网游论坛] 回退同步：清理了 ${removed} 个孤儿帖子`);
+      injectForumContext();
+    }
+  } catch (e) {
+    console.warn('[网游论坛] 清理孤儿帖子失败:', e);
+  }
+}

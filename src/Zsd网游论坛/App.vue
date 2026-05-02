@@ -47,6 +47,7 @@
       :active-section="forumStore.activeSection"
       @switch="forumStore.switchSection($event)"
       @toggle-settings="showSettings = !showSettings"
+      @refresh="handleRefresh"
       @close="requestClose"
     />
 
@@ -219,7 +220,7 @@
 import { ref, inject, computed, watch } from 'vue';
 import type { ForumPost, ForumComment } from './types';
 import { useForumSettingsStore, useForumUiStore } from './settings';
-import { generatePosts, generatePostsMerged, generatePostsSequential, generateComments, injectForumContext } from './aiGenerator';
+import { generatePosts, generatePostsMerged, generatePostsSequential, generateComments, injectForumContext, cleanupOrphanPosts } from './aiGenerator';
 import ForumTabs from './ForumTabs.vue';
 import PostList from './PostList.vue';
 import PostDetail from './PostDetail.vue';
@@ -299,6 +300,17 @@ const windowControls = inject<{ requestClose: boolean }>('windowControls')!;
 
 function requestClose() {
   if (windowControls) windowControls.requestClose = true;
+}
+
+function handleRefresh() {
+  try {
+    const store = useForumSettingsStore();
+    store.reloadFromVars();
+    cleanupOrphanPosts();
+    toastr.success('[论坛] 数据已刷新');
+  } catch (e: any) {
+    toastr.error(`[论坛] 刷新失败: ${e?.message}`);
+  }
 }
 
 function openGenDialog() {
