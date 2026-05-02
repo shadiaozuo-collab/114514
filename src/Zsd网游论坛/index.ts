@@ -47,14 +47,16 @@ function openForum() {
 
   const $container = $('<div>').attr('script_id', SCRIPT_ID).css(isMobile ? {
     position: 'fixed',
-    top: '0',
-    right: '0',
-    width: '100vw',
-    height: '100vh',
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    width: '92vw',
+    maxWidth: '480px',
+    height: '85vh',
     zIndex: '100000',
-    border: 'none',
-    borderRadius: '0',
-    boxShadow: 'none',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '16px',
+    boxShadow: '0 25px 50px -12px rgba(0,0,0,0.6)',
     overflow: 'hidden',
     display: 'flex',
     flexDirection: 'column',
@@ -80,7 +82,7 @@ function openForum() {
     minHeight: '28px',
     cursor: isMobile ? 'default' : 'grab',
     flexShrink: '0',
-    borderRadius: isMobile ? '0' : '8px 8px 0 0',
+    borderRadius: isMobile ? '16px 16px 0 0' : '8px 8px 0 0',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -127,7 +129,23 @@ function openForum() {
     WebkitUserSelect: 'none',
   });
 
+  // 手机端：添加半透明背景遮罩，点击即可关闭
+  const $backdrop = isMobile
+    ? $('<div>').addClass('zsd-forum-mobile-backdrop').css({
+        position: 'fixed',
+        top: '0',
+        left: '0',
+        width: '100vw',
+        height: '100vh',
+        zIndex: '99999',
+        backgroundColor: 'rgba(0,0,0,0.4)',
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+      }).on('click.zsdforum', () => closeForum())
+    : null;
+
   $container.append($header).append($iframe).appendTo('body');
+  if ($backdrop) $backdrop.appendTo('body');
   $overlay.appendTo('body');
 
   let dragStartX = 0, dragStartY = 0, initialLeft = 0, initialTop = 0;
@@ -234,6 +252,7 @@ function openForum() {
 }
 
 function closeForum() {
+  $('.zsd-forum-mobile-backdrop').off('.zsdforum').remove();
   if ($iframe) {
     const $container = $iframe.parent();
     $container.off('.zsdforum');
