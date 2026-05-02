@@ -24,6 +24,15 @@
     />
     <!-- 内容层 -->
     <div class="relative z-[2] flex flex-col h-full">
+    <!-- 全局生成中提示 -->
+    <div
+      v-if="forumStore.isGenerating"
+      class="shrink-0 flex items-center justify-center gap-1.5 py-1 px-2 text-[10px] font-medium"
+      :style="{ backgroundColor: 'var(--f-accent-bg)', color: '#fff' }"
+    >
+      <i class="fa-solid fa-spinner fa-spin"></i>
+      <span>AI 正在生成内容，请稍候…</span>
+    </div>
     <ForumTabs
       :active-section="forumStore.activeSection"
       @switch="forumStore.switchSection($event)"

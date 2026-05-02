@@ -2,8 +2,8 @@ import { createPinia, setActivePinia } from 'pinia';
 import { createApp, reactive, watch } from 'vue';
 import { reloadOnChatChange, createScriptIdIframe, teleportStyle } from '@util/script';
 import App from './App.vue';
-import { useForumSettingsStore } from './settings';
-import { injectForumContext, uninjectForumContext, generatePosts, generatePostsSequential } from './aiGenerator';
+import { useForumSettingsStore, useForumUiStore } from './settings';
+import { injectForumContext, uninjectForumContext, generatePosts, generatePostsMerged, generatePostsSequential } from './aiGenerator';
 
 const themeColors: Record<string, { bg: string; text: string }> = {
   'classic-dark': { bg: '#1f2937', text: '#93c5fd' },
@@ -319,7 +319,6 @@ function cleanupOrphanPosts() {
 
 function setupAutoGenerate() {
   let msgCount = 0;
-  let isGenerating = false;
 
   // 记录最近一次 GENERATION_STARTED 的上下文，用于在 GENERATION_ENDED 时做门控判定
   let lastGenContext: {
@@ -358,13 +357,14 @@ function setupAutoGenerate() {
       return;
     }
 
+    const store = useForumSettingsStore();
+    const uiStore = useForumUiStore();
+
     // [门控] 如果上一轮自动生成还没结束，跳过（防止递归：我们的 generatePosts 也会触发 GENERATION_ENDED）
-    if (isGenerating) {
+    if (uiStore.isGenerating) {
       console.log('[网游论坛] 跳过 GENERATION_ENDED：论坛自动生成仍在执行中');
       return;
     }
-
-    const store = useForumSettingsStore();
     const interval = store.settings.ZautoGenerateInterval;
     if (interval === 0) return;
 
@@ -384,7 +384,7 @@ function setupAutoGenerate() {
 
     if (interval === -1 || msgCount >= interval) {
       msgCount = 0;
-      isGenerating = true;
+      uiStore.isGenerating = true;
       const section = store.settings.ZautoGenerateSection;
       const allSectionIds = store.settings.Zsections.map(s => s.id);
       const isAll = section === 'all';
@@ -427,7 +427,7 @@ function setupAutoGenerate() {
         console.error('[网游论坛] 自动生成失败:', e);
         toastr.error(`[论坛] 自动生成失败: ${errMsg}`);
       } finally {
-        isGenerating = false;
+        uiStore.isGenerating = false;
         lastGenContext = null; // 清理上下文，避免 stale 数据
       }
     }
