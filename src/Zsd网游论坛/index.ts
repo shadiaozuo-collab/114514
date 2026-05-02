@@ -167,34 +167,29 @@ function openForum() {
     }
   });
 
-  // 同步写入 iframe HTML，然后立即初始化 Vue（不依赖 load 事件）
+  // 手动构建 iframe DOM，完全避免 doc.write() 的副作用
   const iframeEl = $iframe[0] as HTMLIFrameElement;
   const doc = iframeEl.contentDocument;
   if (doc) {
-    doc.open();
-    doc.write(`<!DOCTYPE html>
-<html>
-<head>
-<link rel="stylesheet" href="https://testingcf.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css">
-<script src="https://testingcf.jsdelivr.net/gh/n0vi028/JS-Slash-Runner/lib/tailwindcss.min.js"></script>
-<script src="https://testingcf.jsdelivr.net/npm/jquery"></script>
-<script src="https://testingcf.jsdelivr.net/npm/jquery-ui/dist/jquery-ui.min.js"></script>
-<link rel="stylesheet" href="https://testingcf.jsdelivr.net/npm/jquery-ui/themes/base/theme.min.css" />
-<script src="https://testingcf.jsdelivr.net/npm/jquery-ui-touch-punch"></script>
-<script src="https://testingcf.jsdelivr.net/npm/lodash"></script>
-<script src="https://testingcf.jsdelivr.net/gh/n0vi028/JS-Slash-Runner/src/iframe/adjust_iframe_height.js"></script>
-<style>
-*,*::before,*::after{box-sizing:border-box;}
-html,body{margin:0!important;padding:0;overflow:hidden!important;max-width:100%!important;}
-</style>
-</head>
-<body></body>
-</html>`);
-    doc.close();
+    // 添加外部资源
+    const resources = [
+      { tag: 'link', attrs: { rel: 'stylesheet', href: 'https://testingcf.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css' } },
+      { tag: 'script', attrs: { src: 'https://testingcf.jsdelivr.net/gh/n0vi028/JS-Slash-Runner/lib/tailwindcss.min.js' } },
+      { tag: 'script', attrs: { src: 'https://testingcf.jsdelivr.net/npm/jquery' } },
+      { tag: 'script', attrs: { src: 'https://testingcf.jsdelivr.net/npm/jquery-ui/dist/jquery-ui.min.js' } },
+      { tag: 'link', attrs: { rel: 'stylesheet', href: 'https://testingcf.jsdelivr.net/npm/jquery-ui/themes/base/theme.min.css' } },
+      { tag: 'script', attrs: { src: 'https://testingcf.jsdelivr.net/npm/jquery-ui-touch-punch' } },
+      { tag: 'script', attrs: { src: 'https://testingcf.jsdelivr.net/npm/lodash' } },
+      { tag: 'script', attrs: { src: 'https://testingcf.jsdelivr.net/gh/n0vi028/JS-Slash-Runner/src/iframe/adjust_iframe_height.js' } },
+    ];
+    for (const r of resources) {
+      const el = doc.createElement(r.tag);
+      for (const [k, v] of Object.entries(r.attrs)) el.setAttribute(k, v);
+      doc.head.appendChild(el);
+    }
 
-    // 确保 body 已就绪
     const style = doc.createElement('style');
-    style.textContent = 'html, body { height: 100% !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important; background-color: transparent !important; }';
+    style.textContent = '*,*::before,*::after{box-sizing:border-box;}html,body{margin:0!important;padding:0;overflow:hidden!important;max-width:100%!important;height:100%!important;background-color:transparent!important;}';
     doc.head.appendChild(style);
 
     styleTeleport = teleportStyle(doc.head);
