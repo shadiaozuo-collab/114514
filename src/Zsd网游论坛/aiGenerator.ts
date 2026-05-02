@@ -207,7 +207,7 @@ function parseRawPosts(rawPosts: any[], sectionId: string, sourceMessageIndex?: 
     })),
     isAiGenerated: true,
     sourceMessageIndex,
-    metadata: post.metadata || undefined,
+    metadata: (post.metadata && typeof post.metadata === 'object' && !Array.isArray(post.metadata)) ? post.metadata : undefined,
   }));
 }
 

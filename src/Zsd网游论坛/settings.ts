@@ -22,7 +22,7 @@ const PostSchema = z.object({
   timestamp: Timestamp,
   comments: z.array(CommentSchema),
   isAiGenerated: z.boolean(),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.any().optional(),
 });
 
 const ApiPresetSchema = z.object({
@@ -216,7 +216,40 @@ export const useForumSettingsStore = defineStore('forum-settings', () => {
     return {};
   }
 
-  const settings = ref(SettingsSchema.parse(migrateLegacySettings(loadVars())));
+  function safeParseSettings(raw: any) {
+    try {
+      return SettingsSchema.parse(raw);
+    } catch (e: any) {
+      console.error('[Z论坛] SettingsSchema.parse 失败，尝试清理后重试:', e);
+      // 如果 parse 失败，可能是 metadata 等字段触发了 JS-Slash-Runner Zod 的 _zod bug
+      // 尝试将可疑字段设为 undefined 后重试
+      const cleaned = JSON.parse(JSON.stringify(raw));
+      if (cleaned.Zposts && typeof cleaned.Zposts === 'object') {
+        for (const posts of Object.values(cleaned.Zposts) as any[]) {
+          if (Array.isArray(posts)) {
+            for (const post of posts) {
+              if (post && typeof post === 'object') {
+                // 保留 metadata 但确保它是可序列化的对象
+                if (post.metadata !== undefined && post.metadata !== null) {
+                  if (typeof post.metadata !== 'object' || Array.isArray(post.metadata)) {
+                    post.metadata = undefined;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      try {
+        return SettingsSchema.parse(cleaned);
+      } catch (e2: any) {
+        console.error('[Z论坛] 清理后仍然失败，使用默认值:', e2);
+        return SettingsSchema.parse({});
+      }
+    }
+  }
+
+  const settings = ref(safeParseSettings(migrateLegacySettings(loadVars())));
 
   watchEffect(() => {
     if (suppressSync) return;
