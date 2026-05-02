@@ -11,31 +11,62 @@
 
     <template v-if="post">
       <div class="space-y-3">
-        <!-- 比赛标题与轮次 -->
+        <!-- 对阵卡片 -->
         <div class="rounded-lg p-3 border border-[var(--f-border)]" :style="{ backgroundColor: 'var(--f-bg-card)' }">
-          <div class="flex items-center gap-2 mb-2">
-            <span class="text-[10px] px-1.5 py-0.5 rounded font-bold" :style="roundStyle">{{ round }}</span>
-            <span class="text-[10px] text-[var(--f-text-muted)] ml-auto">{{ post.timestamp }}</span>
+          <!-- 标题行 -->
+          <div class="flex items-center gap-2 mb-3">
+            <span class="text-sm font-bold flex-1 text-[var(--f-accent)]">{{ post.title }}</span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0" :style="roundStyle">{{ displayRound }}</span>
+            <span class="text-[10px] text-[var(--f-text-muted)] shrink-0">{{ post.timestamp }}</span>
           </div>
 
-          <!-- 对阵双方 + 比分 -->
-          <div class="flex items-center justify-between gap-3 mb-3">
-            <div class="flex-1 text-center">
-              <div class="text-sm font-bold" :class="teamAClass">{{ teamA }}</div>
-            </div>
-            <div class="shrink-0 text-center px-3">
-              <div class="text-2xl font-black leading-none" :style="{ color: 'var(--f-accent)' }">{{ score }}</div>
-              <div class="text-[10px] text-[var(--f-text-muted)] mt-1">VS</div>
-            </div>
-            <div class="flex-1 text-center">
-              <div class="text-sm font-bold" :class="teamBClass">{{ teamB }}</div>
-            </div>
+          <!-- 对阵主体 -->
+          <div class="mb-3">
+            <!-- 个人赛 -->
+            <template v-if="gameType === 'individual'">
+              <div class="text-center py-2">
+                <div class="text-[10px] text-[var(--f-text-muted)] mb-2">{{ teamA }} {{ teamB ? '· ' + teamB : '' }}</div>
+                <div class="text-3xl font-black leading-none" :style="{ color: 'var(--f-accent)' }">🏆 {{ winner }}</div>
+                <div class="text-xs text-[var(--f-accent)] mt-2 font-bold">{{ scoreLabel }}</div>
+              </div>
+            </template>
+
+            <!-- 无比分 VS -->
+            <template v-else-if="gameType === 'vs'">
+              <div class="flex items-center justify-between gap-3 py-2">
+                <div class="flex-1 text-center">
+                  <div class="text-base font-bold" :class="teamAClass">{{ teamA }}</div>
+                </div>
+                <div class="shrink-0 text-center px-4">
+                  <div class="text-3xl font-black leading-none text-[var(--f-accent)]">VS</div>
+                </div>
+                <div class="flex-1 text-center">
+                  <div class="text-base font-bold" :class="teamBClass">{{ teamB }}</div>
+                </div>
+              </div>
+            </template>
+
+            <!-- 标准 / 竞速 / 生存 -->
+            <template v-else>
+              <div class="flex items-center justify-between gap-3 py-2">
+                <div class="flex-1 text-center min-w-0">
+                  <div class="text-base font-bold" :class="teamAClass">{{ teamA }}</div>
+                </div>
+                <div class="shrink-0 text-center px-4">
+                  <div class="text-3xl font-black leading-none" :style="scoreStyle">{{ displayScore }}</div>
+                  <div class="text-[10px] text-[var(--f-text-muted)] mt-1">{{ scoreLabel }}</div>
+                </div>
+                <div class="flex-1 text-center min-w-0">
+                  <div class="text-base font-bold" :class="teamBClass">{{ teamB }}</div>
+                </div>
+              </div>
+            </template>
           </div>
 
           <!-- 胜者 & MVP -->
-          <div class="flex items-center justify-center gap-4 text-[11px]">
-            <span class="font-bold" :style="{ color: 'var(--f-accent)' }">
-              <i class="fa-solid fa-trophy text-[10px]"></i> 胜者: {{ winner }}
+          <div class="flex items-center justify-center gap-4 text-xs pt-3 border-t border-[var(--f-border)]">
+            <span v-if="showWinner" class="font-bold" :style="{ color: 'var(--f-accent)' }">
+              <i class="fa-solid fa-trophy text-[10px]"></i> {{ winnerLabel }}
             </span>
             <span v-if="mvp" class="text-[var(--f-text-muted)]">
               <i class="fa-solid fa-star text-[10px]"></i> MVP: {{ mvp }}
@@ -45,8 +76,10 @@
 
         <!-- 比赛过程 -->
         <div class="rounded-lg p-3 border border-[var(--f-border)]" :style="{ backgroundColor: 'var(--f-bg-card)' }">
-          <h3 class="text-xs font-bold text-[var(--f-accent)] mb-2">比赛过程</h3>
-          <p class="text-xs text-[var(--f-text)] whitespace-pre-wrap font-semibold">{{ post.content }}</p>
+          <h3 class="text-xs font-bold text-[var(--f-accent)] mb-2 flex items-center gap-1">
+            <i class="fa-solid fa-scroll text-[10px]"></i> 比赛过程
+          </h3>
+          <p class="text-xs text-[var(--f-text)] whitespace-pre-wrap leading-relaxed">{{ post.content }}</p>
         </div>
 
         <!-- 评论 -->
@@ -88,11 +121,96 @@ const m = computed(() => props.post?.metadata || {});
 
 const teamA = computed(() => m.value.teamA || '队伍A');
 const teamB = computed(() => m.value.teamB || '队伍B');
-const score = computed(() => m.value.score || '?-?');
+const rawScore = computed(() => String(m.value.score || '').trim());
 const winner = computed(() => m.value.winner || '待定');
-const round = computed(() => m.value.round || '比赛');
+const round = computed(() => m.value.round || '');
 const mvp = computed(() => m.value.mvp || '');
 
+// ── 赛制类型自动推断（与 TournamentCard.vue 保持一致） ──
+type GameType = 'standard' | 'race' | 'survival' | 'individual' | 'vs';
+
+const gameType = computed((): GameType => {
+  const s = rawScore.value;
+  const w = winner.value;
+  const ta = teamA.value;
+  const tb = teamB.value;
+
+  if (w && w !== '待定' && w !== ta && w !== tb) {
+    return 'individual';
+  }
+
+  if (!s || s === '?-?' || s === '?' || s === '待定' || s === 'VS') {
+    return 'vs';
+  }
+
+  if (/\d+分\d+秒/.test(s) || /^\d+[:：]\d{2}$/.test(s)) {
+    return 'race';
+  }
+
+  if (/\d+人/.test(s) || /存活|完赛|淘汰|晋级|出局/.test(s)) {
+    return 'survival';
+  }
+
+  if (/^\d+[:：]\d+$/.test(s)) {
+    return 'standard';
+  }
+
+  return 'standard';
+});
+
+// ── 显示格式化 ──
+const displayScore = computed(() => {
+  const s = rawScore.value;
+  switch (gameType.value) {
+    case 'race': {
+      const raceMatch = s.match(/(\d+)[:：](\d+)/);
+      if (raceMatch) return `${raceMatch[1]}:${raceMatch[2].padStart(2, '0')}`;
+      return s;
+    }
+    case 'survival':
+      return s;
+    case 'standard':
+      return s.replace(/：/g, ':');
+    default:
+      return s;
+  }
+});
+
+const scoreLabel = computed(() => {
+  switch (gameType.value) {
+    case 'standard': return '比分';
+    case 'race': return '竞速';
+    case 'survival': return '淘汰';
+    case 'individual': return '冠军';
+    case 'vs': return '';
+    default: return '';
+  }
+});
+
+const scoreStyle = computed(() => {
+  switch (gameType.value) {
+    case 'race':
+      return { color: 'var(--f-accent)', fontSize: '1.875rem' };
+    case 'survival':
+      return { color: 'var(--f-danger)', fontSize: '1.875rem' };
+    default:
+      return { color: 'var(--f-accent)' };
+  }
+});
+
+const displayRound = computed(() => {
+  if (round.value) return round.value;
+  switch (gameType.value) {
+    case 'standard': return '常规';
+    case 'race': return '竞速';
+    case 'survival': return '生存';
+    case 'individual': return '个人';
+    case 'vs': return '友谊';
+    default: return '比赛';
+  }
+});
+
+// ── 胜者高亮 ──
 const isTeamAWinner = computed(() => winner.value === teamA.value);
 const isTeamBWinner = computed(() => winner.value === teamB.value);
 
@@ -104,6 +222,17 @@ const teamBClass = computed(() => ({
   'text-[var(--f-text)]': isTeamBWinner.value,
   'text-[var(--f-text-muted)]': !isTeamBWinner.value,
 }));
+
+const showWinner = computed(() => {
+  return winner.value && winner.value !== '待定';
+});
+
+const winnerLabel = computed(() => {
+  if (gameType.value === 'individual') {
+    return `冠军: ${winner.value}`;
+  }
+  return `胜者: ${winner.value}`;
+});
 
 const roundStyle = computed(() => ({
   backgroundColor: 'var(--f-accent-dim)',
