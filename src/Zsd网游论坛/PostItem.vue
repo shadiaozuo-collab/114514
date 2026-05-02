@@ -17,6 +17,7 @@
     <div class="flex items-center justify-between text-[10px] text-[var(--f-text-muted)]">
       <span class="text-[var(--f-author)] font-medium">{{ post.authorId }}</span>
       <div class="flex items-center gap-2">
+        <span v-if="store.settings.ZenableLikes" class="font-medium"><i class="fa-solid fa-heart" :style="{ color: 'var(--f-danger)' }"></i> {{ post.likes }}</span>
         <span class="font-medium"><i class="fa-solid fa-comment" :style="{ color: 'var(--f-text-muted)' }"></i> {{ post.comments.length }}</span>
         <span v-if="post.timestamp" class="font-medium">{{ post.timestamp }}</span>
       </div>
@@ -25,8 +26,10 @@
 </template>
 
 <script setup lang="ts">
+import { useForumSettingsStore } from './settings';
 import type { ForumPost } from './types';
 
+const store = useForumSettingsStore();
 defineProps<{ post: ForumPost }>();
 defineEmits<{ click: []; delete: [postId: string] }>();
 </script>

@@ -22,6 +22,7 @@ const PostSchema = z.object({
   timestamp: Timestamp,
   comments: z.array(CommentSchema),
   isAiGenerated: z.boolean(),
+  likes: z.coerce.number().default(0),
   metadata: z.any().optional(),
 });
 
@@ -41,36 +42,37 @@ const SectionConfigSchema = z.object({
   type: z.enum(['forum', 'tournament', 'newspaper']).default('forum'),
 });
 
-const defaultOutputFormat = `你必须严格按照以下JSON结构输出，不要添加、删除或重命名字段：
+const defaultOutputFormat = `你必须严格按照以下XML标签结构输出，不要添加、删除或重命名标签：
 
 批量生成帖子时输出：
-{
-  "posts": [
-    {
-      "title": "帖子标题",
-      "content": "帖子正文，50-150字，有具体细节",
-      "authorId": "发帖人ID",
-      "timestamp": "故事内时间，如 第三章·深夜",
-      "comments": [
-        { "authorId": "评论人ID", "content": "评论内容，20-80字", "timestamp": "故事内时间" }
-      ]
-    }
-  ]
-}
+<post>
+  <title>帖子标题</title>
+  <content>帖子正文，50-150字，有具体细节</content>
+  <authorId>发帖人ID</authorId>
+  <timestamp>故事内时间，如 第三章·深夜</timestamp>
+  <likes>点赞数，0-999之间的整数，热帖高水帖低</likes>
+  <comments>
+    <comment>
+      <authorId>评论人ID</authorId>
+      <content>评论内容，20-80字</content>
+      <timestamp>故事内时间</timestamp>
+    </comment>
+  </comments>
+</post>
 
 生成评论时输出：
-{
-  "comments": [
-    { "authorId": "评论人ID", "content": "评论内容", "timestamp": "故事内时间" }
-  ]
-}
+<comment>
+  <authorId>评论人ID</authorId>
+  <content>评论内容</content>
+  <timestamp>故事内时间</timestamp>
+</comment>
 
 格式注意事项：
-- 标题简短有力，像真实论坛标题
-- 内容要有具体细节，不要太笼统
-- 评论简洁直接，像真实网络评论
+- 每个帖子用 <post>...</post> 包裹，每个评论用 <comment>...</comment> 包裹
+- 内容可包含多行和特殊字符，但不要出现未闭合的标签
 - timestamp 必须填故事内时间，不要用现实时间或留空
-- 严格按上述JSON结构输出，不要输出其他任何文本`;
+- likes 是模拟点赞数/热度，根据帖子质量分配 0-999 的整数
+- 严格按上述XML结构输出，不要输出其他任何文本`;
 
 const defaultPromptA = `你是一个现实世界的网络论坛用户。请根据上下文生成论坛帖子和评论。
 要求：
@@ -142,6 +144,7 @@ const SettingsSchema = z.object({
   ZautoCleanEnabled: z.boolean().default(false),
   ZautoCleanThreshold: z.coerce.number().min(1).default(50),
   ZminReplyLength: z.coerce.number().min(0).default(30),
+  ZenableLikes: z.boolean().default(true),
 });
 
 function migrateLegacySettings(vars: Record<string, any>) {

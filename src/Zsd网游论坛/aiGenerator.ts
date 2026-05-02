@@ -5,6 +5,139 @@ export function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).substring(2, 8);
 }
 
+// ── XML 解析辅助函数 ──
+
+function extractTag(xml: string, tag: string): string {
+  const match = xml.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`));
+  return match ? match[1].trim() : '';
+}
+
+function extractBlocks(xml: string, tag: string): string[] {
+  const regex = new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, 'g');
+  const blocks: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = regex.exec(xml)) !== null) {
+    blocks.push(m[1]);
+  }
+  return blocks;
+}
+
+function parseMetadataFromXml(metaXml: string): Record<string, any> | undefined {
+  if (!metaXml) return undefined;
+  const result: Record<string, any> = {};
+  const tagRegex = /<(\w+)>([\s\S]*?)<\/\1>/g;
+  let m: RegExpExecArray | null;
+  while ((m = tagRegex.exec(metaXml)) !== null) {
+    const [, key, val] = m;
+    if (/<\w+>/.test(val)) {
+      if (key === 'articles') {
+        result[key] = [];
+        const articleBlocks = extractBlocks(val, 'article');
+        for (const ab of articleBlocks) {
+          result[key].push({
+            title: extractTag(ab, 'title'),
+            content: extractTag(ab, 'content'),
+            author: extractTag(ab, 'author'),
+            column: extractTag(ab, 'column'),
+          });
+        }
+      } else {
+        result[key] = parseMetadataFromXml(val) || val.trim();
+      }
+    } else {
+      result[key] = val.trim();
+    }
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function parsePostBlocks(xmlText: string): any[] {
+  const posts: any[] = [];
+  const postBlocks = extractBlocks(xmlText, 'post');
+  for (const postXml of postBlocks) {
+    const comments: any[] = [];
+    const commentBlocks = extractBlocks(postXml, 'comment');
+    for (const cXml of commentBlocks) {
+      comments.push({
+        authorId: extractTag(cXml, 'authorId'),
+        content: extractTag(cXml, 'content'),
+        timestamp: extractTag(cXml, 'timestamp'),
+      });
+    }
+    // 移除 comments 部分，避免 comments 内容干扰其他字段
+    const postXmlWithoutComments = postXml.replace(/<comments>[\s\S]*?<\/comments>/, '');
+    const metadataXml = extractTag(postXmlWithoutComments, 'metadata');
+    posts.push({
+      title: extractTag(postXmlWithoutComments, 'title'),
+      content: extractTag(postXmlWithoutComments, 'content'),
+      authorId: extractTag(postXmlWithoutComments, 'authorId'),
+      timestamp: extractTag(postXmlWithoutComments, 'timestamp'),
+      likes: parseInt(extractTag(postXmlWithoutComments, 'likes')) || 0,
+      comments,
+      metadata: metadataXml ? parseMetadataFromXml(metadataXml) : undefined,
+    });
+  }
+  return posts;
+}
+
+function parseCommentsFromXml(xmlText: string): any[] {
+  const comments: any[] = [];
+  const commentBlocks = extractBlocks(xmlText, 'comment');
+  for (const cXml of commentBlocks) {
+    comments.push({
+      authorId: extractTag(cXml, 'authorId'),
+      content: extractTag(cXml, 'content'),
+      timestamp: extractTag(cXml, 'timestamp'),
+    });
+  }
+  return comments;
+}
+
+function safeXmlParse(raw: string, opts?: { sectionIds?: string[] }): any {
+  const text = String(raw || '').trim();
+
+  // 如果返回的是HTML错误页（以 < 开头但不是 XML 帖子/评论/section）
+  if (text.startsWith('<')) {
+    const firstTag = text.match(/^<(\w+)/);
+    if (firstTag && !['post', 'comment', 'section'].includes(firstTag[1].toLowerCase())) {
+      const preview = text.substring(0, 200).replace(/\s+/g, ' ');
+      throw new Error(`API返回了HTML页面而非XML，可能是API配置错误或服务器故障。预览: ${preview}`);
+    }
+  }
+
+  // 尝试从Markdown代码块中提取
+  const codeBlockMatch = text.match(/```(?:xml)?\s*([\s\S]*?)\s*```/);
+  const xmlText = codeBlockMatch ? codeBlockMatch[1].trim() : text;
+
+  // Merged 模式：按 <section id="X"> 分组
+  const sectionBlocks = extractBlocks(xmlText, 'section');
+  if (sectionBlocks.length > 0 && opts?.sectionIds) {
+    const result: Record<string, any> = {};
+    for (const secXml of sectionBlocks) {
+      const idMatch = secXml.match(/^<section[^>]*id=["']?([^"'>\s]+)/);
+      const id = idMatch ? idMatch[1] : '';
+      result[id] = { posts: parsePostBlocks(secXml) };
+    }
+    return result;
+  }
+
+  // 单板块：直接解析 <post>
+  const posts = parsePostBlocks(xmlText);
+  if (posts.length > 0) {
+    return { posts };
+  }
+
+  // 评论模式：解析 <comment>
+  const comments = parseCommentsFromXml(xmlText);
+  if (comments.length > 0) {
+    return { comments };
+  }
+
+  throw new Error(`AI返回的内容无法解析为XML。原始内容前200字符: ${text.substring(0, 200)}`);
+}
+
+// ── 上下文构建 ──
+
 function buildContext(forumName: string, sectionName: string, posts: ForumPost[], injectCount: number, sectionType: 'forum' | 'tournament' | 'newspaper' = 'forum') {
   const recent = posts.slice(0, injectCount);
   if (recent.length === 0) return '';
@@ -48,104 +181,6 @@ function buildContext(forumName: string, sectionName: string, posts: ForumPost[]
   return text;
 }
 
-function makePostItemSchema(commentCount: number) {
-  return {
-    type: 'object',
-    properties: {
-      title: { type: 'string', description: '帖子标题' },
-      content: { type: 'string', description: '帖子正文内容' },
-      authorId: { type: 'string', description: '发帖玩家ID' },
-      timestamp: { type: 'string', description: '故事内时间' },
-      comments: {
-        type: 'array',
-        description: `帖子下的评论，${commentCount}条左右`,
-        items: {
-          type: 'object',
-          properties: {
-            authorId: { type: 'string', description: '评论玩家ID' },
-            content: { type: 'string', description: '评论内容' },
-            timestamp: { type: 'string', description: '故事内时间' },
-          },
-          required: ['authorId', 'content', 'timestamp'],
-        },
-      },
-      metadata: {
-        type: 'object',
-        description: '额外的元数据，如赛事比分(teamA,teamB,score,winner,round)、报纸期号(issueNumber)和文章列表(articles)等',
-      },
-    },
-    required: ['title', 'content', 'authorId', 'timestamp', 'comments'],
-  };
-}
-
-export function postBatchSchema(postCount: number, commentCount: number) {
-  return {
-    name: 'forum_posts_batch',
-    value: {
-      type: 'object',
-      properties: {
-        posts: {
-          type: 'array',
-          description: `生成的帖子列表，${postCount}个左右`,
-          items: makePostItemSchema(commentCount),
-        },
-      },
-      required: ['posts'],
-    },
-  };
-}
-
-export function mergedSectionsBatchSchema(sectionIds: string[], postCount: number, commentCount: number) {
-  const item = makePostItemSchema(commentCount);
-  const properties: Record<string, any> = {};
-  for (const id of sectionIds) {
-    properties[id] = {
-      type: 'object',
-      properties: {
-        posts: {
-          type: 'array',
-          description: `板块${id}的帖子列表，${postCount}个左右`,
-          items: item,
-        },
-      },
-      required: ['posts'],
-    };
-  }
-  return {
-    name: 'forum_posts_merged_sections',
-    value: {
-      type: 'object',
-      properties,
-      required: sectionIds,
-    },
-  };
-}
-
-export function commentSchema(count: number) {
-  return {
-    name: 'forum_comment',
-    value: {
-      type: 'object',
-      properties: {
-        comments: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              authorId: { type: 'string', description: '评论玩家ID' },
-              content: { type: 'string', description: '评论内容' },
-              timestamp: { type: 'string', description: '故事内时间' },
-            },
-            required: ['authorId', 'content', 'timestamp'],
-          },
-          description: `生成的评论列表，${count}条左右`,
-        },
-      },
-      required: ['comments'],
-    },
-  };
-}
-
 function buildSystemPrompt(
   promptBase: string,
   outputFormat: string,
@@ -161,10 +196,10 @@ function buildSystemPrompt(
 
   if (sectionType === 'tournament') {
     prompt += `\n\n本次生成要求：约${postCount || 3}场比赛战报，每场比赛附带${commentCount || 3}条左右的观众评论。`;
-    prompt += `\n\n【赛事输出格式补充】每个帖子除了常规字段外，还必须包含 metadata 字段，其中有：teamA（队伍A名称）、teamB（队伍B名称）、score（比分，如"3:2"）、winner（胜者名称）、round（轮次，如"小组赛""半决赛""决赛"）。`;
+    prompt += `\n\n【赛事输出格式补充】每个帖子除了常规字段外，还必须包含 metadata 字段，用 XML 标签表示：\n<metadata>\n  <teamA>队伍A名称</teamA>\n  <teamB>队伍B名称</teamB>\n  <score>比分，如3:2</score>\n  <winner>胜者名称</winner>\n  <round>轮次，如小组赛/半决赛/决赛</round>\n</metadata>`;
   } else if (sectionType === 'newspaper') {
     prompt += `\n\n本次生成要求：生成1期报纸，包含${postCount || 3}个栏目左右的文章，每期附带${commentCount || 3}条左右的读者来信评论。`;
-    prompt += `\n\n【报纸输出格式补充】每个帖子除了常规字段外，还必须包含 metadata 字段，其中有：issueNumber（期号，如"第3期"）、articles（文章数组，每个文章包含 title、content、author、column 字段，column 为栏目名如"要闻""攻略""八卦"）。`;
+    prompt += `\n\n【报纸输出格式补充】每个帖子除了常规字段外，还必须包含 metadata 字段，用 XML 标签表示：\n<metadata>\n  <issueNumber>期号，如第3期</issueNumber>\n  <articles>\n    <article>\n      <title>文章标题</title>\n      <content>文章内容</content>\n      <author>作者ID</author>\n      <column>栏目名如要闻/攻略/八卦</column>\n    </article>\n  </articles>\n</metadata>`;
   } else {
     if (postCount !== undefined && commentCount !== undefined) {
       prompt += `\n\n本次生成要求：约${postCount}个帖子，每个帖子约${commentCount}条评论。`;
@@ -202,6 +237,7 @@ function parseRawPosts(rawPosts: any[], sectionId: string, sourceMessageIndex?: 
     content: post.content || '',
     authorId: post.authorId || '匿名用户',
     timestamp: post.timestamp || '',
+    likes: post.likes || 0,
     comments: (post.comments || []).map((c: any) => ({
       id: generateId(),
       authorId: c.authorId || '匿名用户',
@@ -213,40 +249,6 @@ function parseRawPosts(rawPosts: any[], sectionId: string, sourceMessageIndex?: 
     sourceMessageIndex,
     metadata: (post.metadata && typeof post.metadata === 'object' && !Array.isArray(post.metadata)) ? post.metadata : undefined,
   }));
-}
-
-/** 将本轮生成的帖子ID记录到当前AI消息的extra中，用于后续回退同步 */
-/** 安全解析AI返回的JSON，处理HTML错误页、Markdown代码块等边缘情况 */
-function safeJsonParse(raw: string): any {
-  const text = String(raw || '').trim();
-
-  // 1. 如果返回的是HTML错误页，直接抛出友好错误
-  if (text.startsWith('<')) {
-    const preview = text.substring(0, 200).replace(/\s+/g, ' ');
-    throw new Error(`API返回了HTML页面而非JSON，可能是API配置错误或服务器故障。预览: ${preview}`);
-  }
-
-  // 2. 尝试从Markdown代码块中提取JSON
-  const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-  if (codeBlockMatch) {
-    try {
-      return JSON.parse(codeBlockMatch[1].trim());
-    } catch {}
-  }
-
-  // 3. 尝试直接解析
-  try {
-    return JSON.parse(text);
-  } catch (e: any) {
-    // 4. 尝试去掉首尾的非JSON字符（如引号、换行等）
-    const cleaned = text.replace(/^[^{\[]+/, '').replace(/[^}\]]+$/, '');
-    if (cleaned !== text) {
-      try {
-        return JSON.parse(cleaned);
-      } catch {}
-    }
-    throw new Error(`AI返回的内容无法解析为JSON。原始内容前200字符: ${text.substring(0, 200)}`);
-  }
 }
 
 function recordPostIdsToMessage(postsMap: Record<string, ForumPost[]>) {
@@ -266,6 +268,8 @@ function recordPostIdsToMessage(postsMap: Record<string, ForumPost[]>) {
     console.warn('[网游论坛] 记录帖子关联失败:', e);
   }
 }
+
+// ── 帖子生成 ──
 
 export async function generatePosts(sectionId: string, topic?: string) {
   const store = useForumSettingsStore();
@@ -292,13 +296,12 @@ export async function generatePosts(sectionId: string, topic?: string) {
 
   let userInput: string;
   if (sectionType === 'tournament') {
-    userInput = `请为"${sectionName}"赛事板块生成${postCount}场比赛的战报，每场比赛附带${commentCount}条左右的观众评论。${topicHint}\n以JSON格式返回，包含posts数组，每个帖子有title（比赛名称）、content（比赛过程描述）、authorId（解说员ID）、timestamp（故事内时间）、comments数组，以及metadata字段包含teamA、teamB、score、winner、round。`;
+    userInput = `请为"${sectionName}"赛事板块生成${postCount}场比赛的战报，每场比赛附带${commentCount}条左右的观众评论。${topicHint}\n以XML格式返回，每个帖子用 <post>...</post> 包裹，包含 <title>、<content>、<authorId>、<timestamp>、<likes>、<comments>（内含 <comment>），以及 <metadata>（内含 <teamA>、<teamB>、<score>、<winner>、<round>）。`;
   } else if (sectionType === 'newspaper') {
-    userInput = `请生成1期"${sectionName}"报纸，包含${postCount}个栏目左右的文章，附带${commentCount}条左右的读者来信评论。${topicHint}\n以JSON格式返回，包含posts数组（仅1个元素，即一期报纸），帖子有title（报纸名称+期号）、content（主编寄语/导读）、authorId（主编ID）、timestamp（故事内时间）、comments数组，以及metadata字段包含issueNumber和articles数组（每个文章有title、content、author、column）。`;
+    userInput = `请生成1期"${sectionName}"报纸，包含${postCount}个栏目左右的文章，附带${commentCount}条左右的读者来信评论。${topicHint}\n以XML格式返回，仅1个 <post>，包含 <title>（报纸名称+期号）、<content>（主编寄语/导读）、<authorId>（主编ID）、<timestamp>、<likes>、<comments>，以及 <metadata>（内含 <issueNumber> 和 <articles>，每个 article 有 <title>、<content>、<author>、<column>）。`;
   } else {
-    userInput = `请为论坛"${sectionName}"板块批量生成${postCount}个左右的帖子，每个帖子附带${commentCount}条左右的评论。${topicHint}\n以JSON格式返回，包含posts数组，每个帖子有title、content、authorId、timestamp（故事内时间）、comments数组。`;
+    userInput = `请为论坛"${sectionName}"板块批量生成${postCount}个左右的帖子，每个帖子附带${commentCount}条左右的评论。${topicHint}\n以XML格式返回，每个帖子用 <post>...</post> 包裹，包含 <title>、<content>、<authorId>、<timestamp>、<likes>、<comments>（内含 <comment>，每个 comment 有 <authorId>、<content>、<timestamp>）。`;
   }
-  const schema = postBatchSchema(postCount, commentCount);
   const result = settings.ZincludePresetContext
     ? await generate({
         user_input: userInput,
@@ -306,7 +309,6 @@ export async function generatePosts(sectionId: string, topic?: string) {
         custom_api: hasCustomApi ? customApi : undefined,
         max_chat_history: settings.ZinjectChatHistoryCount,
         injects: [{ role: 'system', content: systemPrompt, position: 'in_chat', depth: 0, should_scan: true }],
-        json_schema: schema,
       })
     : await generateRaw({
         user_input: userInput,
@@ -320,10 +322,9 @@ export async function generatePosts(sectionId: string, topic?: string) {
           { role: 'system', content: systemPrompt },
           'user_input',
         ],
-        json_schema: schema,
       });
 
-  const parsed = safeJsonParse(result as string);
+  const parsed = safeXmlParse(result as string);
   const posts = parseRawPosts(parsed.posts || [], sectionId, SillyTavern.getContext().chat.length - 1);
   recordPostIdsToMessage({ [sectionId]: posts });
   return posts;
@@ -353,7 +354,7 @@ export async function generatePostsMerged(sectionIds: string[], topic?: string) 
     sectionPrompts.push(`【板块${id}（${type === 'tournament' ? '赛事' : type === 'newspaper' ? '报纸' : '论坛'}）：${name}】\n${sp}`);
   }
 
-  const combinedSystemPrompt = `${sectionPrompts.join('\n\n')}\n\n【重要说明】请分别为上述${sectionIds.length}个板块生成帖子。输出JSON中必须包含 ${sectionIds.join('、')} 键，每个键下包含 posts 数组。各板块的帖子风格、主题和语气必须严格对应各自的板块要求，不要混淆。`;
+  const combinedSystemPrompt = `${sectionPrompts.join('\n\n')}\n\n【重要说明】请分别为上述${sectionIds.length}个板块生成帖子。输出XML中必须用 <section id="板块ID">...</section> 包裹每个板块的内容，每个板块内部包含若干个 <post>...</post>。各板块的帖子风格、主题和语气必须严格对应各自的板块要求，不要混淆。`;
 
   const topicHint = topic?.trim() ? `\n本次讨论方向/话题：${topic.trim()}` : '';
 
@@ -369,12 +370,11 @@ export async function generatePostsMerged(sectionIds: string[], topic?: string) 
       userInput += `【论坛】"${name}"：生成${postCount}个左右的帖子，每个帖子附带${commentCount}条左右的评论。\n\n`;
     }
   }
-  userInput += `请确保各板块的内容风格严格区分，各自对应板块的设定要求。${topicHint}\n以JSON格式返回，结构为 { ${sectionIds.map(id => `"${id}": { "posts": [...] }`).join(', ')} }。`;
+  userInput += `请确保各板块的内容风格严格区分，各自对应板块的设定要求。${topicHint}\n以XML格式返回，结构为：<section id="${sectionIds[0]}"><post>...</post></section> <section id="${sectionIds[1] || ''}"><post>...</post></section>...`;
 
   const customApi = buildCustomApi(settings);
   const hasCustomApi = Object.keys(customApi).length > 0;
 
-  const schema = mergedSectionsBatchSchema(sectionIds, postCount, commentCount);
   const result = settings.ZincludePresetContext
     ? await generate({
         user_input: userInput,
@@ -382,7 +382,6 @@ export async function generatePostsMerged(sectionIds: string[], topic?: string) 
         custom_api: hasCustomApi ? customApi : undefined,
         max_chat_history: settings.ZinjectChatHistoryCount,
         injects: [{ role: 'system', content: combinedSystemPrompt, position: 'in_chat', depth: 0, should_scan: true }],
-        json_schema: schema,
       })
     : await generateRaw({
         user_input: userInput,
@@ -396,10 +395,9 @@ export async function generatePostsMerged(sectionIds: string[], topic?: string) 
           { role: 'system', content: combinedSystemPrompt },
           'user_input',
         ],
-        json_schema: schema,
       });
 
-  const parsed = safeJsonParse(result as string);
+  const parsed = safeXmlParse(result as string, { sectionIds });
   const sourceIndex = SillyTavern.getContext().chat.length - 1;
   const resultMap: Record<string, ForumPost[]> = {};
   for (const id of sectionIds) {
@@ -436,8 +434,7 @@ export async function generateComments(sectionId: string, post: ForumPost) {
   const customApi = buildCustomApi(settings);
   const hasCustomApi = Object.keys(customApi).length > 0;
 
-  const userInput = `帖子标题：${post.title}\n帖子内容：${post.content}\n作者：${post.authorId}\n帖子时间：${post.timestamp}\n${existingComments ? `已有评论：\n${existingComments}\n` : ''}请为这个帖子生成${commentCount}条左右的评论，以JSON格式返回。包含comments数组，每条有authorId、content和timestamp（故事内时间）。`;
-  const schema = commentSchema(commentCount);
+  const userInput = `帖子标题：${post.title}\n帖子内容：${post.content}\n作者：${post.authorId}\n帖子时间：${post.timestamp}\n${existingComments ? `已有评论：\n${existingComments}\n` : ''}请为这个帖子生成${commentCount}条左右的评论，以XML格式返回。每个评论用 <comment>...</comment> 包裹，包含 <authorId>、<content> 和 <timestamp>（故事内时间）。`;
   const result = settings.ZincludePresetContext
     ? await generate({
         user_input: userInput,
@@ -445,7 +442,6 @@ export async function generateComments(sectionId: string, post: ForumPost) {
         custom_api: hasCustomApi ? customApi : undefined,
         max_chat_history: settings.ZinjectChatHistoryCount,
         injects: [{ role: 'system', content: systemPrompt, position: 'in_chat', depth: 0, should_scan: true }],
-        json_schema: schema,
       })
     : await generateRaw({
         user_input: userInput,
@@ -459,10 +455,9 @@ export async function generateComments(sectionId: string, post: ForumPost) {
           { role: 'system', content: systemPrompt },
           'user_input',
         ],
-        json_schema: schema,
       });
 
-  const parsed = safeJsonParse(result as string);
+  const parsed = safeXmlParse(result as string);
   return (parsed.comments || []).map((c: any) => ({
     id: generateId(),
     authorId: c.authorId || '匿名用户',

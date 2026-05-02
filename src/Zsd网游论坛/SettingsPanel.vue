@@ -185,6 +185,13 @@
         </div>
       </div>
       <div class="flex items-center gap-2">
+        <input v-model="store.settings.ZenableLikes" type="checkbox" class="accent-blue-500" />
+        <div>
+          <label class="text-[11px] text-[var(--f-text-secondary)]">显示点赞数（热度）</label>
+          <p class="text-[10px]" :style="{ color: 'var(--f-text-muted)' }">AI生成帖子时附带模拟点赞数，用户可手动点赞</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
         <input v-model="store.settings.ZincludePresetContext" type="checkbox" class="accent-blue-500" />
         <div>
           <label class="text-[11px] text-[var(--f-text-secondary)]">带入酒馆预设上下文</label>

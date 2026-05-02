@@ -16,6 +16,16 @@
           <div class="flex items-center gap-2 text-[10px] text-[var(--f-text-muted)] mb-2">
             <span class="text-[var(--f-author)]">{{ post.authorId }}</span>
             <span v-if="post.timestamp">{{ post.timestamp }}</span>
+            <span v-if="store.settings.ZenableLikes" class="ml-auto flex items-center gap-1">
+              <button
+                class="flex items-center gap-1 px-2 py-0.5 rounded transition-colors"
+                :class="hasLiked ? 'text-[var(--f-danger)]' : 'text-[var(--f-text-muted)] hover:text-[var(--f-danger)]'"
+                @click="toggleLike"
+              >
+                <i :class="hasLiked ? 'fa-solid fa-heart' : 'fa-regular fa-heart'"></i>
+                {{ post.likes }}
+              </button>
+            </span>
           </div>
           <p class="text-xs text-[var(--f-text)] whitespace-pre-wrap font-semibold">{{ post.content }}</p>
         </div>
@@ -47,9 +57,25 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue';
+import { useForumSettingsStore } from './settings';
 import type { ForumPost } from './types';
 import CommentItem from './CommentItem.vue';
 
-defineProps<{ post: ForumPost | null; generating: boolean }>();
+const store = useForumSettingsStore();
+const props = defineProps<{ post: ForumPost | null; generating: boolean }>();
 defineEmits<{ back: []; generateComments: []; addComment: []; delete: [] }>();
+
+const hasLiked = ref(false);
+
+function toggleLike() {
+  if (!props.post) return;
+  if (hasLiked.value) {
+    props.post.likes = Math.max(0, props.post.likes - 1);
+    hasLiked.value = false;
+  } else {
+    props.post.likes++;
+    hasLiked.value = true;
+  }
+}
 </script>

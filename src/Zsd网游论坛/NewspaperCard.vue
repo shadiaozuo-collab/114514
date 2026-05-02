@@ -29,7 +29,10 @@
 
     <!-- 底部 -->
     <div class="flex items-center justify-between mt-2 pt-2 border-t border-[var(--f-border)]">
-      <span class="text-[10px] text-[var(--f-text-muted)]">主编: {{ post.authorId }}</span>
+      <div class="flex items-center gap-2">
+        <span class="text-[10px] text-[var(--f-text-muted)]">主编: {{ post.authorId }}</span>
+        <span v-if="store.settings.ZenableLikes" class="text-[10px] text-[var(--f-danger)]"><i class="fa-solid fa-heart text-[9px]"></i> {{ post.likes }}</span>
+      </div>
       <button
         class="px-0.5 opacity-0 group-hover:opacity-100 transition-opacity text-[var(--f-text-muted)] hover:text-[var(--f-danger)]"
         @click.stop="$emit('delete', post.id)"
@@ -43,8 +46,10 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useForumSettingsStore } from './settings';
 import type { ForumPost } from './types';
 
+const store = useForumSettingsStore();
 const props = defineProps<{ post: ForumPost }>();
 defineEmits<{ click: []; delete: [postId: string] }>();
 
