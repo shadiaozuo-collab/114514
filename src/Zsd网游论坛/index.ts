@@ -47,7 +47,7 @@ function openForum() {
 
   const $container = $('<div>').attr('script_id', SCRIPT_ID).css(isMobile ? {
     position: 'fixed',
-    bottom: '0',
+    top: '10vh',
     left: '50%',
     transform: 'translateX(-50%)',
     width: '92vw',
@@ -203,6 +203,7 @@ function openForum() {
     for (const r of resources) {
       const el = doc.createElement(r.tag);
       for (const [k, v] of Object.entries(r.attrs)) el.setAttribute(k, v);
+      if (el.tagName === 'SCRIPT') (el as HTMLScriptElement).async = false;
       doc.head.appendChild(el);
     }
 
