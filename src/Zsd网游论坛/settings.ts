@@ -22,6 +22,7 @@ const PostSchema = z.object({
   timestamp: Timestamp,
   comments: z.array(CommentSchema),
   isAiGenerated: z.boolean(),
+  metadata: z.record(z.any()).optional(),
 });
 
 const ApiPresetSchema = z.object({
@@ -37,6 +38,7 @@ const SectionConfigSchema = z.object({
   id: z.string(),
   name: z.string(),
   prompt: z.string(),
+  type: z.enum(['forum', 'tournament', 'newspaper']).default('forum'),
 });
 
 const defaultOutputFormat = `你必须严格按照以下JSON结构输出，不要添加、删除或重命名字段：
@@ -151,9 +153,15 @@ function migrateLegacySettings(vars: Record<string, any>) {
     const promptA = result.Zprompt_A || result.Zprompt_现实讨论 || defaultPromptA;
     const promptB = result.Zprompt_B || result.Zprompt_游戏中论坛 || defaultPromptB;
     result.Zsections = [
-      { id: 'A', name: nameA, prompt: promptA },
-      { id: 'B', name: nameB, prompt: promptB },
+      { id: 'A', name: nameA, prompt: promptA, type: 'forum' },
+      { id: 'B', name: nameB, prompt: promptB, type: 'forum' },
     ];
+  }
+  // 兼容旧数据：给没有 type 的 section 补上默认值
+  if (Array.isArray(result.Zsections)) {
+    for (const sec of result.Zsections) {
+      if (!sec.type) sec.type = 'forum';
+    }
   }
 
   // Zposts 旧格式迁移（中文键名 → A/B）
@@ -262,13 +270,17 @@ export const useForumSettingsStore = defineStore('forum-settings', () => {
     return settings.value.Zsections.find(s => s.id === sectionId)?.prompt || '';
   }
 
-  function addSection(name: string, prompt: string) {
+  function getSectionType(sectionId: string): 'forum' | 'tournament' | 'newspaper' {
+    return settings.value.Zsections.find(s => s.id === sectionId)?.type || 'forum';
+  }
+
+  function addSection(name: string, prompt: string, type: 'forum' | 'tournament' | 'newspaper' = 'forum') {
     if (settings.value.Zsections.length >= 5) {
       toastr.warning('板块数量已达上限（5个）');
       return;
     }
     const id = 'sec' + Date.now().toString(36);
-    settings.value.Zsections.push({ id, name, prompt });
+    settings.value.Zsections.push({ id, name, prompt, type });
     settings.value.Zposts[id] = settings.value.Zposts[id] || [];
   }
 
@@ -329,6 +341,7 @@ export const useForumSettingsStore = defineStore('forum-settings', () => {
     reloadFromVars,
     getSectionName,
     getSectionPrompt,
+    getSectionType,
     addSection,
     removeSection,
     applyApiPreset,

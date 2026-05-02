@@ -10,6 +10,9 @@
         @click="$emit('switch', tab.key)"
       >
         {{ tab.name }}
+        <span v-if="tab.type !== 'forum'" class="ml-1 text-[8px] px-1 rounded" :style="typeBadgeStyle(tab.type)">
+          {{ tab.type === 'tournament' ? '赛' : '报' }}
+        </span>
       </button>
     </div>
     <div class="flex items-center px-1 gap-0.5 border-l border-[var(--f-border)] flex-shrink-0">
@@ -45,8 +48,19 @@ const tabs = computed(() =>
   settingsStore.settings.Zsections.map(s => ({
     key: s.id,
     name: s.name || '未命名板块',
+    type: (s as any).type || 'forum',
   })),
 );
+
+function typeBadgeStyle(type: string) {
+  if (type === 'tournament') {
+    return { backgroundColor: 'var(--f-danger-bg)', color: 'var(--f-danger)' };
+  }
+  if (type === 'newspaper') {
+    return { backgroundColor: 'var(--f-accent-dim)', color: 'var(--f-accent)' };
+  }
+  return {};
+}
 </script>
 
 <style scoped>

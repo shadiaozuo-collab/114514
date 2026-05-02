@@ -5,16 +5,44 @@ export function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).substring(2, 8);
 }
 
-function buildContext(forumName: string, sectionName: string, posts: ForumPost[], injectCount: number) {
+function buildContext(forumName: string, sectionName: string, posts: ForumPost[], injectCount: number, sectionType: 'forum' | 'tournament' | 'newspaper' = 'forum') {
   const recent = posts.slice(0, injectCount);
   if (recent.length === 0) return '';
-  let text = `[${forumName} - ${sectionName}]\n`;
-  for (const post of recent) {
-    text += `\n[${post.timestamp}] 帖子: 【${post.title}】 by ${post.authorId}\n${post.content}\n`;
-    if (post.comments.length > 0) {
-      text += '评论: ';
-      text += post.comments.slice(0, 5).map(c => `[${c.timestamp}] ${c.authorId}: ${c.content}`).join(' | ');
-      text += '\n';
+  let text = '';
+  if (sectionType === 'tournament') {
+    text = `[${forumName} - ${sectionName}（赛事）]\n`;
+    for (const post of recent) {
+      const m = post.metadata || {};
+      text += `\n[${post.timestamp}] ${post.title}\n`;
+      text += `对阵: ${m.teamA || '?'} vs ${m.teamB || '?'} | 比分: ${m.score || '?'} | 胜者: ${m.winner || '?'} | 轮次: ${m.round || '?'}\n`;
+      text += `过程: ${post.content}\n`;
+      if (post.comments.length > 0) {
+        text += '评论: ';
+        text += post.comments.slice(0, 5).map(c => `[${c.timestamp}] ${c.authorId}: ${c.content}`).join(' | ');
+        text += '\n';
+      }
+    }
+  } else if (sectionType === 'newspaper') {
+    text = `[${forumName} - ${sectionName}（报纸）]\n`;
+    for (const post of recent) {
+      const m = post.metadata || {};
+      const articles = m.articles || [];
+      text += `\n[${post.timestamp}] ${post.title} ${m.issueNumber || ''}\n`;
+      if (articles.length > 0) {
+        text += `头条: ${articles[0]?.title || ''}\n`;
+        text += articles.slice(1, 4).map((a: any) => `栏目「${a.column || '?'}」: ${a.title || ''}`).join('\n') + '\n';
+      }
+      text += `主编寄语: ${post.content}\n`;
+    }
+  } else {
+    text = `[${forumName} - ${sectionName}]\n`;
+    for (const post of recent) {
+      text += `\n[${post.timestamp}] 帖子: 【${post.title}】 by ${post.authorId}\n${post.content}\n`;
+      if (post.comments.length > 0) {
+        text += '评论: ';
+        text += post.comments.slice(0, 5).map(c => `[${c.timestamp}] ${c.authorId}: ${c.content}`).join(' | ');
+        text += '\n';
+      }
     }
   }
   return text;
@@ -122,14 +150,25 @@ function buildSystemPrompt(
   playerForumId: string,
   postCount?: number,
   commentCount?: number,
+  sectionType: 'forum' | 'tournament' | 'newspaper' = 'forum',
 ) {
   let prompt = promptBase;
   if (outputFormat.trim()) prompt += '\n\n' + outputFormat.trim();
-  if (postCount !== undefined && commentCount !== undefined) {
-    prompt += `\n\n本次生成要求：约${postCount}个帖子，每个帖子约${commentCount}条评论。`;
-  } else if (commentCount !== undefined) {
-    prompt += `\n\n本次生成要求：约${commentCount}条评论。`;
+
+  if (sectionType === 'tournament') {
+    prompt += `\n\n本次生成要求：约${postCount || 3}场比赛战报，每场比赛附带${commentCount || 3}条左右的观众评论。`;
+    prompt += `\n\n【赛事输出格式补充】每个帖子除了常规字段外，还必须包含 metadata 字段，其中有：teamA（队伍A名称）、teamB（队伍B名称）、score（比分，如"3:2"）、winner（胜者名称）、round（轮次，如"小组赛""半决赛""决赛"）。`;
+  } else if (sectionType === 'newspaper') {
+    prompt += `\n\n本次生成要求：生成1期报纸，包含${postCount || 3}个栏目左右的文章，每期附带${commentCount || 3}条左右的读者来信评论。`;
+    prompt += `\n\n【报纸输出格式补充】每个帖子除了常规字段外，还必须包含 metadata 字段，其中有：issueNumber（期号，如"第3期"）、articles（文章数组，每个文章包含 title、content、author、column 字段，column 为栏目名如"要闻""攻略""八卦"）。`;
+  } else {
+    if (postCount !== undefined && commentCount !== undefined) {
+      prompt += `\n\n本次生成要求：约${postCount}个帖子，每个帖子约${commentCount}条评论。`;
+    } else if (commentCount !== undefined) {
+      prompt += `\n\n本次生成要求：约${commentCount}条评论。`;
+    }
   }
+
   if (authorIdPrompt.trim()) prompt += `\n\n【用户ID生成规则】${authorIdPrompt.trim()}`;
   if (playerForumId.trim()) prompt += `\n\n【玩家ID】当前故事的主角在论坛中的ID是"${playerForumId.trim()}"，如果有玩家角色参与的帖子或评论，使用此ID。`;
   if (decentralizedMode) {
@@ -168,6 +207,7 @@ function parseRawPosts(rawPosts: any[], sectionId: string, sourceMessageIndex?: 
     })),
     isAiGenerated: true,
     sourceMessageIndex,
+    metadata: post.metadata || undefined,
   }));
 }
 
@@ -228,6 +268,7 @@ export async function generatePosts(sectionId: string, topic?: string) {
   const { settings } = store;
   const sectionName = store.getSectionName(sectionId);
   const promptBase = store.getSectionPrompt(sectionId);
+  const sectionType = store.getSectionType(sectionId);
   const postCount = settings.ZpostCountHint;
   const commentCount = settings.ZcommentCountHint;
   const systemPrompt = buildSystemPrompt(
@@ -238,13 +279,21 @@ export async function generatePosts(sectionId: string, topic?: string) {
     settings.ZplayerForumId,
     postCount,
     commentCount,
+    sectionType,
   );
   const customApi = buildCustomApi(settings);
   const hasCustomApi = Object.keys(customApi).length > 0;
 
   const topicHint = topic?.trim() ? `\n本次讨论方向/话题：${topic.trim()}` : '';
 
-  const userInput = `请为论坛"${sectionName}"板块批量生成${postCount}个左右的帖子，每个帖子附带${commentCount}条左右的评论。${topicHint}\n以JSON格式返回，包含posts数组，每个帖子有title、content、authorId、timestamp（故事内时间）、comments数组。`;
+  let userInput: string;
+  if (sectionType === 'tournament') {
+    userInput = `请为"${sectionName}"赛事板块生成${postCount}场比赛的战报，每场比赛附带${commentCount}条左右的观众评论。${topicHint}\n以JSON格式返回，包含posts数组，每个帖子有title（比赛名称）、content（比赛过程描述）、authorId（解说员ID）、timestamp（故事内时间）、comments数组，以及metadata字段包含teamA、teamB、score、winner、round。`;
+  } else if (sectionType === 'newspaper') {
+    userInput = `请生成1期"${sectionName}"报纸，包含${postCount}个栏目左右的文章，附带${commentCount}条左右的读者来信评论。${topicHint}\n以JSON格式返回，包含posts数组（仅1个元素，即一期报纸），帖子有title（报纸名称+期号）、content（主编寄语/导读）、authorId（主编ID）、timestamp（故事内时间）、comments数组，以及metadata字段包含issueNumber和articles数组（每个文章有title、content、author、column）。`;
+  } else {
+    userInput = `请为论坛"${sectionName}"板块批量生成${postCount}个左右的帖子，每个帖子附带${commentCount}条左右的评论。${topicHint}\n以JSON格式返回，包含posts数组，每个帖子有title、content、authorId、timestamp（故事内时间）、comments数组。`;
+  }
   const result = settings.ZincludePresetContext
     ? await generate({
         user_input: userInput,
@@ -283,6 +332,7 @@ export async function generatePostsMerged(sectionIds: string[], topic?: string) 
   for (const id of sectionIds) {
     const name = store.getSectionName(id);
     const prompt = store.getSectionPrompt(id);
+    const type = store.getSectionType(id);
     const sp = buildSystemPrompt(
       prompt,
       settings.ZoutputFormat,
@@ -291,20 +341,28 @@ export async function generatePostsMerged(sectionIds: string[], topic?: string) 
       settings.ZplayerForumId,
       postCount,
       commentCount,
+      type,
     );
-    sectionPrompts.push(`【板块${id}：${name}】\n${sp}`);
+    sectionPrompts.push(`【板块${id}（${type === 'tournament' ? '赛事' : type === 'newspaper' ? '报纸' : '论坛'}）：${name}】\n${sp}`);
   }
 
   const combinedSystemPrompt = `${sectionPrompts.join('\n\n')}\n\n【重要说明】请分别为上述${sectionIds.length}个板块生成帖子。输出JSON中必须包含 ${sectionIds.join('、')} 键，每个键下包含 posts 数组。各板块的帖子风格、主题和语气必须严格对应各自的板块要求，不要混淆。`;
 
   const topicHint = topic?.trim() ? `\n本次讨论方向/话题：${topic.trim()}` : '';
 
-  let userInput = `请分别为以下${sectionIds.length}个板块批量生成帖子：\n\n`;
+  let userInput = `请分别为以下${sectionIds.length}个板块生成内容：\n\n`;
   for (const id of sectionIds) {
     const name = store.getSectionName(id);
-    userInput += `板块"${name}"：生成${postCount}个左右的帖子，每个帖子附带${commentCount}条左右的评论。\n\n`;
+    const type = store.getSectionType(id);
+    if (type === 'tournament') {
+      userInput += `【赛事】"${name}"：生成${postCount}场比赛战报，每场比赛附带${commentCount}条左右观众评论。每个帖子metadata包含teamA、teamB、score、winner、round。\n\n`;
+    } else if (type === 'newspaper') {
+      userInput += `【报纸】"${name}"：生成1期报纸，包含${postCount}个栏目左右的文章，附带${commentCount}条左右读者来信。帖子metadata包含issueNumber和articles数组。\n\n`;
+    } else {
+      userInput += `【论坛】"${name}"：生成${postCount}个左右的帖子，每个帖子附带${commentCount}条左右的评论。\n\n`;
+    }
   }
-  userInput += `请确保各板块的帖子风格严格区分，各自对应板块的设定要求。${topicHint}\n以JSON格式返回，结构为 { ${sectionIds.map(id => `"${id}": { "posts": [...] }`).join(', ')} }。每个帖子包含 title、content、authorId、timestamp、comments 字段。`;
+  userInput += `请确保各板块的内容风格严格区分，各自对应板块的设定要求。${topicHint}\n以JSON格式返回，结构为 { ${sectionIds.map(id => `"${id}": { "posts": [...] }`).join(', ')} }。`;
 
   const customApi = buildCustomApi(settings);
   const hasCustomApi = Object.keys(customApi).length > 0;
@@ -414,7 +472,8 @@ export function injectForumContext() {
   for (const sec of settings.Zsections) {
     const posts = settings.Zposts[sec.id] || [];
     const name = sec.name;
-    const ctx = buildContext(settings.ZforumName, name, posts, settings.ZinjectPostCount);
+    const type = (sec as any).type || 'forum';
+    const ctx = buildContext(settings.ZforumName, name, posts, settings.ZinjectPostCount, type);
     if (ctx) parts.push(ctx);
   }
   if (parts.length === 0) return;

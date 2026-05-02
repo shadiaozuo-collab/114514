@@ -26,6 +26,11 @@
         <div v-for="(sec, index) in store.settings.Zsections" :key="sec.id" class="border rounded p-2 space-y-1" :style="{ borderColor: 'var(--f-border)' }">
           <div class="flex items-center gap-1">
             <input v-model="sec.name" class="flex-1 text-xs px-2 py-1 rounded outline-none border focus:border-[var(--f-accent)]" :style="inputStyle" :placeholder="`板块${index + 1}名称`" />
+            <select v-model="sec.type" class="text-xs px-2 py-1 rounded outline-none border focus:border-[var(--f-accent)]" :style="inputStyle">
+              <option value="forum">论坛</option>
+              <option value="tournament">赛事</option>
+              <option value="newspaper">报纸</option>
+            </select>
             <button
               v-if="store.settings.Zsections.length > 1"
               class="text-[10px] px-2 py-1 rounded border transition-colors"

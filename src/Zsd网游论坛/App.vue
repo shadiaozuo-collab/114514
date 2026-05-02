@@ -40,15 +40,61 @@
       @close="requestClose"
     />
 
+    <!-- 论坛板块 -->
     <PostList
-      v-if="!forumStore.selectedPostId && !forumStore.showEditor && !showSettings"
+      v-if="currentSectionType === 'forum' && !forumStore.selectedPostId && !forumStore.showEditor && !showSettings"
       :posts="forumStore.currentPosts"
       @select="forumStore.selectPost($event)"
       @delete="forumStore.deletePost($event)"
     />
-
     <PostDetail
-      v-else-if="forumStore.selectedPostId && !forumStore.showEditor && !showSettings"
+      v-else-if="currentSectionType === 'forum' && forumStore.selectedPostId && !forumStore.showEditor && !showSettings"
+      :post="forumStore.selectedPost"
+      :generating="forumStore.isGenerating"
+      @back="forumStore.goBack()"
+      @generate-comments="handleGenerateComments"
+      @add-comment="forumStore.openCommentEditor()"
+      @delete="handleDeletePost"
+    />
+
+    <!-- 赛事板块 -->
+    <div v-if="currentSectionType === 'tournament' && !forumStore.selectedPostId && !forumStore.showEditor && !showSettings" class="flex-1 overflow-y-auto p-2 space-y-2">
+      <div v-if="forumStore.currentPosts.length === 0" class="text-center text-[var(--f-text-muted)] text-xs py-8">
+        <span class="font-bold">暂无比赛记录，点击下方按钮生成</span>
+      </div>
+      <TournamentCard
+        v-for="post in forumStore.currentPosts"
+        :key="post.id"
+        :post="post"
+        @click="forumStore.selectPost(post.id)"
+        @delete="forumStore.deletePost($event)"
+      />
+    </div>
+    <TournamentDetail
+      v-else-if="currentSectionType === 'tournament' && forumStore.selectedPostId && !forumStore.showEditor && !showSettings"
+      :post="forumStore.selectedPost"
+      :generating="forumStore.isGenerating"
+      @back="forumStore.goBack()"
+      @generate-comments="handleGenerateComments"
+      @add-comment="forumStore.openCommentEditor()"
+      @delete="handleDeletePost"
+    />
+
+    <!-- 报纸板块 -->
+    <div v-if="currentSectionType === 'newspaper' && !forumStore.selectedPostId && !forumStore.showEditor && !showSettings" class="flex-1 overflow-y-auto p-2 space-y-2">
+      <div v-if="forumStore.currentPosts.length === 0" class="text-center text-[var(--f-text-muted)] text-xs py-8">
+        <span class="font-bold">暂无报纸，点击下方按钮生成</span>
+      </div>
+      <NewspaperCard
+        v-for="post in forumStore.currentPosts"
+        :key="post.id"
+        :post="post"
+        @click="forumStore.selectPost(post.id)"
+        @delete="forumStore.deletePost($event)"
+      />
+    </div>
+    <NewspaperDetail
+      v-else-if="currentSectionType === 'newspaper' && forumStore.selectedPostId && !forumStore.showEditor && !showSettings"
       :post="forumStore.selectedPost"
       :generating="forumStore.isGenerating"
       @back="forumStore.goBack()"
@@ -76,14 +122,14 @@
         @click="openGenDialog()"
       >
         <i :class="forumStore.isGenerating ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-robot'"></i>
-        {{ forumStore.isGenerating ? '生成中...' : 'AI生成帖子' }}
+        {{ forumStore.isGenerating ? '生成中...' : genButtonText }}
       </button>
       <button
         class="text-[11px] px-3 py-1.5 rounded bg-[var(--f-bg-input)] hover:bg-[var(--f-bg-hover)] text-[var(--f-text)]"
         :disabled="forumStore.isGenerating"
         @click="forumStore.openPostEditor()"
       >
-        <i class="fa-solid fa-pen"></i> 发帖
+        <i class="fa-solid fa-pen"></i> {{ postButtonText }}
       </button>
     </div>
 
@@ -91,7 +137,7 @@
     <div v-if="forumStore.showGenDialog && !showSettings" class="absolute inset-0 z-20 flex flex-col p-3" :style="{ backgroundColor: 'var(--f-bg)' }">
       <div class="flex items-center justify-between mb-3">
         <span class="text-sm font-bold text-[var(--f-text)]">
-          <i class="fa-solid fa-robot text-[var(--f-accent)]"></i> AI 批量生成帖子
+          <i class="fa-solid fa-robot text-[var(--f-accent)]"></i> {{ genDialogTitle }}
         </span>
         <button class="text-[var(--f-text-secondary)] hover:text-[var(--f-text)]" @click="forumStore.closeGenDialog()">
           <i class="fa-solid fa-xmark"></i>
@@ -167,6 +213,10 @@ import { generatePosts, generatePostsMerged, generatePostsSequential, generateCo
 import ForumTabs from './ForumTabs.vue';
 import PostList from './PostList.vue';
 import PostDetail from './PostDetail.vue';
+import TournamentCard from './TournamentCard.vue';
+import TournamentDetail from './TournamentDetail.vue';
+import NewspaperCard from './NewspaperCard.vue';
+import NewspaperDetail from './NewspaperDetail.vue';
 import PostEditor from './PostEditor.vue';
 import SettingsPanel from './SettingsPanel.vue';
 
@@ -213,6 +263,26 @@ const customThemeVars = computed(() => {
     '--f-danger': '#f87171',
     '--f-danger-bg': '#7f1d1d',
   } as Record<string, string>;
+});
+
+const currentSectionType = computed(() => settingsStore.getSectionType(forumStore.activeSection));
+
+const genButtonText = computed(() => {
+  if (currentSectionType.value === 'tournament') return 'AI生成比赛';
+  if (currentSectionType.value === 'newspaper') return 'AI生成报纸';
+  return 'AI生成帖子';
+});
+
+const postButtonText = computed(() => {
+  if (currentSectionType.value === 'tournament') return '添加比赛';
+  if (currentSectionType.value === 'newspaper') return '发报纸';
+  return '发帖';
+});
+
+const genDialogTitle = computed(() => {
+  if (currentSectionType.value === 'tournament') return 'AI 批量生成比赛';
+  if (currentSectionType.value === 'newspaper') return 'AI 批量生成报纸';
+  return 'AI 批量生成帖子';
 });
 
 const windowControls = inject<{ requestClose: boolean }>('windowControls')!;
