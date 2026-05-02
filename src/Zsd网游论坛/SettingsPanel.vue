@@ -202,7 +202,28 @@
         <datalist id="model-suggestions">
           <option v-for="m in suggestedModels" :key="m" :value="m">{{ m }}</option>
         </datalist>
-        <p class="text-[10px] mt-0.5" :style="{ color: 'var(--f-text-muted)' }">根据 API 源或地址自动推荐模型，也可直接输入未列出的新模型</p>
+        <div class="flex items-center gap-1 mt-1">
+          <button
+            class="flex-1 text-[10px] px-2 py-1 rounded border transition-colors"
+            :style="{ backgroundColor: 'var(--f-accent-dim)', color: 'var(--f-accent)', borderColor: 'var(--f-accent)' }"
+            :disabled="isLoadingModels"
+            @click="loadModelList"
+          >
+            <i :class="isLoadingModels ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-rotate'"></i>
+            {{ isLoadingModels ? '加载中…' : '加载模型列表' }}
+          </button>
+          <button
+            v-if="store.settings.ZfetchedModels.length > 0"
+            class="text-[10px] px-2 py-1 rounded border transition-colors"
+            :style="{ backgroundColor: 'var(--f-danger-bg)', color: 'var(--f-danger)', borderColor: 'var(--f-danger)' }"
+            @click="store.settings.ZfetchedModels = []; toastr.info('已清除加载的模型列表')"
+          >
+            <i class="fa-solid fa-trash-can"></i> 清除
+          </button>
+        </div>
+        <p class="text-[10px] mt-0.5" :style="{ color: 'var(--f-text-muted)' }">
+          {{ store.settings.ZfetchedModels.length > 0 ? `已从 API 加载 ${store.settings.ZfetchedModels.length} 个模型` : '点击按钮从 API 地址获取可用模型列表，支持任意第三方中转站' }}
+        </p>
       </div>
       <div>
         <label class="text-[11px] text-[var(--f-text-secondary)] block mb-1">代理预设名（优先使用）</label>
@@ -403,6 +424,7 @@ function addSection() {
 
 const savePresetName = ref('');
 const selectedPresetName = ref('');
+const isLoadingModels = ref(false);
 
 function savePreset() {
   const name = savePresetName.value.trim();
@@ -447,6 +469,10 @@ const MODEL_SUGGESTIONS: Record<string, string[]> = {
 };
 
 const suggestedModels = computed(() => {
+  // 优先使用从 API 加载的模型列表
+  if (store.settings.ZfetchedModels.length > 0) {
+    return store.settings.ZfetchedModels;
+  }
   const source = (store.settings.ZapiSource || '').toLowerCase().trim();
   const url = (store.settings.ZapiUrl || '').toLowerCase();
   if (source && MODEL_SUGGESTIONS[source]) {
@@ -459,6 +485,47 @@ const suggestedModels = computed(() => {
   if (url.includes('azure')) return MODEL_SUGGESTIONS.azure;
   return [];
 });
+
+async function loadModelList() {
+  const url = store.settings.ZapiUrl.trim();
+  const key = store.settings.ZapiKey.trim();
+  if (!url) {
+    toastr.warning('请先填写自定义 API 地址');
+    return;
+  }
+  isLoadingModels.value = true;
+  try {
+    // 确保 models 端点正确拼接
+    let modelsUrl = url;
+    if (modelsUrl.endsWith('/')) modelsUrl = modelsUrl.slice(0, -1);
+    if (!modelsUrl.endsWith('/models')) {
+      if (!modelsUrl.includes('/v')) {
+        modelsUrl += '/v1/models';
+      } else {
+        modelsUrl += '/models';
+      }
+    }
+    const headers: Record<string, string> = {};
+    if (key) headers['Authorization'] = `Bearer ${key}`;
+    const res = await fetch(modelsUrl, { headers });
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    }
+    const data = await res.json();
+    const models = (data.data || []).map((m: any) => m.id || m.model || m.name || '').filter(Boolean);
+    if (models.length === 0) {
+      toastr.warning('API 返回的模型列表为空');
+      return;
+    }
+    store.settings.ZfetchedModels = models;
+    toastr.success(`已加载 ${models.length} 个模型`);
+  } catch (e: any) {
+    console.error('[论坛] 加载模型列表失败:', e);
+    toastr.error(`加载模型列表失败: ${e?.message || String(e)}`);
+  } finally {
+    isLoadingModels.value = false;
+  }
+}
 
 const inputStyle = computed(() => ({
   backgroundColor: 'var(--f-bg-input)',

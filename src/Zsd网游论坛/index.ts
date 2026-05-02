@@ -356,15 +356,17 @@ function cleanupOrphanPosts() {
 function setupAutoGenerate() {
   let msgCount = 0;
 
-  // 记录最近一次 GENERATION_STARTED 的上下文，用于在 GENERATION_ENDED 时做门控判定
-  let lastGenContext: {
+  // 使用队列记录 GENERATION_STARTED 的上下文，解决并发生成（如主AI+扩展quiet生成）时的上下文错乱问题
+  // SillyTavern 中 GENERATION_STARTED 和 GENERATION_ENDED 是严格配对触发的，用 FIFO 队列可以正确对应
+  type GenCtx = {
     type: string;
     dryRun: boolean;
     quietPrompt: string;
     automaticTrigger: boolean;
-  } | null = null;
+  };
+  const genCtxQueue: GenCtx[] = [];
 
-  function isQuietLikeGeneration(ctx: typeof lastGenContext): boolean {
+  function isQuietLikeGeneration(ctx: GenCtx | null): boolean {
     if (!ctx) return false;
     if (ctx.dryRun) return true;
     if (ctx.type === 'quiet') return true;
@@ -374,12 +376,12 @@ function setupAutoGenerate() {
   }
 
   const startEvt = eventOn(tavern_events.GENERATION_STARTED, (type, option, dryRun) => {
-    lastGenContext = {
+    genCtxQueue.push({
       type,
       dryRun,
       quietPrompt: option?.quiet_prompt || '',
       automaticTrigger: !!option?.automatic_trigger,
-    };
+    });
   });
 
   const endEvt = eventOn(tavern_events.GENERATION_ENDED, async () => {
@@ -389,9 +391,16 @@ function setupAutoGenerate() {
     const uiStore = useForumUiStore();
     const interval = store.settings.ZautoGenerateInterval;
 
+    // 从队列中弹出对应的 GENERATION_STARTED 上下文（FIFO 配对）
+    const genCtx = genCtxQueue.shift();
+    if (!genCtx) {
+      console.log('[网游论坛] 跳过 GENERATION_ENDED：没有匹配的 GENERATION_STARTED 上下文');
+      return;
+    }
+
     // [门控] 过滤 quiet / dryRun / automatic_trigger 等后台生成
-    if (isQuietLikeGeneration(lastGenContext)) {
-      const reason = `type=${lastGenContext?.type}, dryRun=${lastGenContext?.dryRun}, quiet=${!!lastGenContext?.quietPrompt}`;
+    if (isQuietLikeGeneration(genCtx)) {
+      const reason = `type=${genCtx.type}, dryRun=${genCtx.dryRun}, quiet=${!!genCtx.quietPrompt}`;
       console.log(`[网游论坛] 跳过本轮 GENERATION_ENDED (${reason})`);
       return;
     }
@@ -477,7 +486,6 @@ function setupAutoGenerate() {
     } finally {
       uiStore.isGenerating = false;
       uiStore.stopGenerationTimer();
-      lastGenContext = null;
     }
   });
 

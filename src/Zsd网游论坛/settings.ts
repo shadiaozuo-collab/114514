@@ -138,6 +138,7 @@ const SettingsSchema = z.object({
   ZapiKey: z.string().default(''),
   ZapiSource: z.string().default(''),
   ZapiPresets: z.array(ApiPresetSchema).default([]),
+  ZfetchedModels: z.array(z.string()).default([]),
   ZautoCleanEnabled: z.boolean().default(false),
   ZautoCleanThreshold: z.coerce.number().min(1).default(50),
   ZminReplyLength: z.coerce.number().min(0).default(30),
@@ -197,7 +198,7 @@ function migrateLegacySettings(vars: Record<string, any>) {
 const varOption = { type: 'chat' as const };
 const globalVarOption = { type: 'global' as const };
 
-const API_CONFIG_KEYS = ['ZapiUrl', 'ZapiKey', 'ZapiSource', 'Zmodel', 'ZproxyPreset', 'ZapiPresets'] as const;
+const API_CONFIG_KEYS = ['ZapiUrl', 'ZapiKey', 'ZapiSource', 'Zmodel', 'ZproxyPreset', 'ZapiPresets', 'ZfetchedModels'] as const;
 
 // 禁用 registerVariableSchema：JS-Slash-Runner 内嵌的 Zod 实现与标准 Zod 不兼容，
 // 会导致 schema 损坏并在后续变量访问时触发 `Cannot read properties of undefined (reading '_zod')` 错误。
