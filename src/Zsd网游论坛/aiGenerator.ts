@@ -142,41 +142,56 @@ function buildContext(forumName: string, sectionName: string, posts: ForumPost[]
   const recent = posts.slice(0, injectCount);
   if (recent.length === 0) return '';
   let text = '';
+
+  // 统一添加"参考-only"标注头
+  const header = `=== 以下为本板块已有历史内容（仅作氛围参考，严禁重复、续写或改写） ===\n\n[${forumName} - ${sectionName}] 历史帖子参考：\n`;
+  const footer = `\n=== 历史参考结束。以上是过去的内容，你现在必须创作全新的、完全不同的帖子和评论 ===\n`;
+
   if (sectionType === 'tournament') {
-    text = `[${forumName} - ${sectionName}（赛事）]\n`;
+    text = header;
+    let idx = 1;
     for (const post of recent) {
       const m = post.metadata || {};
-      text += `\n[${post.timestamp}] ${post.title}\n`;
-      text += `对阵: ${m.teamA || '?'} vs ${m.teamB || '?'} | 比分: ${m.score || '?'} | 胜者: ${m.winner || '?'} | 轮次: ${m.round || '?'}\n`;
-      text += `过程: ${post.content}\n`;
+      text += `\n[历史${idx}] [${post.timestamp}] ${post.title}\n`;
+      text += `  对阵: ${m.teamA || '?'} vs ${m.teamB || '?'} | 比分: ${m.score || '?'} | 胜者: ${m.winner || '?'} | 轮次: ${m.round || '?'}\n`;
+      text += `  赛况摘要: ${post.content.substring(0, 120)}${post.content.length > 120 ? '...' : ''}\n`;
       if (post.comments.length > 0) {
-        text += '评论: ';
-        text += post.comments.slice(0, 5).map(c => `[${c.timestamp}] ${c.authorId}: ${c.content}`).join(' | ');
+        text += '  热门评论: ';
+        text += post.comments.slice(0, 3).map(c => `${c.authorId}: ${c.content.substring(0, 60)}${c.content.length > 60 ? '...' : ''}`).join(' | ');
         text += '\n';
       }
+      idx++;
     }
+    text += footer;
   } else if (sectionType === 'newspaper') {
-    text = `[${forumName} - ${sectionName}（报纸）]\n`;
+    text = header;
+    let idx = 1;
     for (const post of recent) {
       const m = post.metadata || {};
       const articles = m.articles || [];
-      text += `\n[${post.timestamp}] ${post.title} ${m.issueNumber || ''}\n`;
+      text += `\n[历史${idx}] [${post.timestamp}] ${post.title} ${m.issueNumber || ''}\n`;
       if (articles.length > 0) {
-        text += `头条: ${articles[0]?.title || ''}\n`;
-        text += articles.slice(1, 4).map((a: any) => `栏目「${a.column || '?'}」: ${a.title || ''}`).join('\n') + '\n';
+        text += `  头条: ${articles[0]?.title || ''}\n`;
+        text += articles.slice(1, 3).map((a: any) => `  栏目「${a.column || '?'}」: ${a.title || ''}`).join('\n') + '\n';
       }
-      text += `主编寄语: ${post.content}\n`;
+      text += `  主编寄语摘要: ${post.content.substring(0, 120)}${post.content.length > 120 ? '...' : ''}\n`;
+      idx++;
     }
+    text += footer;
   } else {
-    text = `[${forumName} - ${sectionName}]\n`;
+    text = header;
+    let idx = 1;
     for (const post of recent) {
-      text += `\n[${post.timestamp}] 帖子: 【${post.title}】 by ${post.authorId}\n${post.content}\n`;
+      text += `\n[历史${idx}] [${post.timestamp}] 《${post.title}》 by ${post.authorId}\n`;
+      text += `  内容摘要: ${post.content.substring(0, 120)}${post.content.length > 120 ? '...' : ''}\n`;
       if (post.comments.length > 0) {
-        text += '评论: ';
-        text += post.comments.slice(0, 5).map(c => `[${c.timestamp}] ${c.authorId}: ${c.content}`).join(' | ');
+        text += '  热门评论: ';
+        text += post.comments.slice(0, 3).map(c => `${c.authorId}: ${c.content.substring(0, 60)}${c.content.length > 60 ? '...' : ''}`).join(' | ');
         text += '\n';
       }
+      idx++;
     }
+    text += footer;
   }
   return text;
 }
@@ -195,24 +210,35 @@ function buildSystemPrompt(
   if (outputFormat.trim()) prompt += '\n\n' + outputFormat.trim();
 
   if (sectionType === 'tournament') {
-    prompt += `\n\n本次生成要求：约${postCount || 3}场比赛战报，每场比赛附带${commentCount || 3}条左右的观众评论。`;
-    prompt += `\n\n【赛事输出格式补充】每个帖子除了常规字段外，还必须包含 metadata 字段，用 XML 标签表示：\n<metadata>\n  <teamA>队伍A名称</teamA>\n  <teamB>队伍B名称</teamB>\n  <score>比分，如3:2</score>\n  <winner>胜者名称</winner>\n  <round>轮次，如小组赛/半决赛/决赛</round>\n</metadata>`;
+    prompt += `\n\n<task>\n本次生成要求：约${postCount || 3}场比赛战报，每场比赛附带${commentCount || 3}条左右的观众评论。`;
+    prompt += `\n\n【赛事输出格式补充】每个帖子除了常规字段外，还必须包含 metadata 字段，用 XML 标签表示：\n<metadata>\n  <teamA>队伍A名称</teamA>\n  <teamB>队伍B名称</teamB>\n  <score>比分，如3:2</score>\n  <winner>胜者名称</winner>\n  <round>轮次，如小组赛/半决赛/决赛</round>\n</metadata>\n</task>`;
   } else if (sectionType === 'newspaper') {
-    prompt += `\n\n本次生成要求：生成1期报纸，包含${postCount || 3}个栏目左右的文章，每期附带${commentCount || 3}条左右的读者来信评论。`;
-    prompt += `\n\n【报纸输出格式补充】每个帖子除了常规字段外，还必须包含 metadata 字段，用 XML 标签表示：\n<metadata>\n  <issueNumber>期号，如第3期</issueNumber>\n  <articles>\n    <article>\n      <title>文章标题</title>\n      <content>文章内容</content>\n      <author>作者ID</author>\n      <column>栏目名如要闻/攻略/八卦</column>\n    </article>\n  </articles>\n</metadata>`;
+    prompt += `\n\n<task>\n本次生成要求：生成1期报纸，包含${postCount || 3}个栏目左右的文章，每期附带${commentCount || 3}条左右的读者来信评论。`;
+    prompt += `\n\n【报纸输出格式补充】每个帖子除了常规字段外，还必须包含 metadata 字段，用 XML 标签表示：\n<metadata>\n  <issueNumber>期号，如第3期</issueNumber>\n  <articles>\n    <article>\n      <title>文章标题</title>\n      <content>文章内容</content>\n      <author>作者ID</author>\n      <column>栏目名如要闻/攻略/八卦</column>\n    </article>\n  </articles>\n</metadata>\n</task>`;
   } else {
     if (postCount !== undefined && commentCount !== undefined) {
-      prompt += `\n\n本次生成要求：约${postCount}个帖子，每个帖子约${commentCount}条评论。`;
+      prompt += `\n\n<task>\n本次生成要求：约${postCount}个全新帖子，每个帖子约${commentCount}条评论。注意：每个帖子的主题必须完全不同，严禁同质化。\n</task>`;
     } else if (commentCount !== undefined) {
-      prompt += `\n\n本次生成要求：约${commentCount}条评论。`;
+      prompt += `\n\n<task>\n本次生成要求：约${commentCount}条评论。\n</task>`;
     }
   }
 
-  if (authorIdPrompt.trim()) prompt += `\n\n【用户ID生成规则】${authorIdPrompt.trim()}`;
+  if (authorIdPrompt.trim()) prompt += `\n\n${authorIdPrompt.trim()}`;
   if (playerForumId.trim()) prompt += `\n\n【玩家ID】当前故事的主角在论坛中的ID是"${playerForumId.trim()}"，如果有玩家角色参与的帖子或评论，使用此ID。`;
   if (decentralizedMode) {
     prompt += '\n\n【去中心化模式】注意：论坛内容不应只围绕主角或主角的社交圈。大部分帖子应该是由与主角无关的普通论坛用户发起的，反映更广泛的世界动态、其他玩家的日常讨论、边缘话题等。只有少数帖子可以与主角相关。';
   }
+
+  // 添加生成前自检要求
+  prompt += `\n\n<self_check>
+生成前自检（必须执行）：
+1. 【重复自检】确认本次生成的新帖子主题与"历史帖子参考"中列出的任何帖子都不同
+2. 【同质化自检】确认同一批次内各帖子的标题和主题差异明显，没有两个帖子在讨论同一事物
+3. 【时间自检】确认timestamp符合故事当前时间节点，不提前讨论未发生事件
+4. 【观点自检】确认每个帖子的评论中包含至少两种不同的观点或立场
+5. 【ID自检】确认所有用户ID均不重复，且风格多样化
+</self_check>`;
+
   return prompt;
 }
 
@@ -296,11 +322,11 @@ export async function generatePosts(sectionId: string, topic?: string) {
 
   let userInput: string;
   if (sectionType === 'tournament') {
-    userInput = `请为"${sectionName}"赛事板块生成${postCount}场比赛的战报，每场比赛附带${commentCount}条左右的观众评论。${topicHint}\n以XML格式返回，每个帖子用 <post>...</post> 包裹，包含 <title>、<content>、<authorId>、<timestamp>、<likes>、<comments>（内含 <comment>），以及 <metadata>（内含 <teamA>、<teamB>、<score>、<winner>、<round>）。`;
+    userInput = `请为"${sectionName}"赛事板块生成${postCount}场全新的比赛战报，每场比赛附带${commentCount}条左右的观众评论。${topicHint}\n注意：必须创作全新的赛事内容，不要重复或续写历史帖子中已出现过的比赛。\n以XML格式返回，每个帖子用 <post>...</post> 包裹，包含 <title>、<content>、<authorId>、<timestamp>、<likes>、<comments>（内含 <comment>），以及 <metadata>（内含 <teamA>、<teamB>、<score>、<winner>、<round>）。`;
   } else if (sectionType === 'newspaper') {
-    userInput = `请生成1期"${sectionName}"报纸，包含${postCount}个栏目左右的文章，附带${commentCount}条左右的读者来信评论。${topicHint}\n以XML格式返回，仅1个 <post>，包含 <title>（报纸名称+期号）、<content>（主编寄语/导读）、<authorId>（主编ID）、<timestamp>、<likes>、<comments>，以及 <metadata>（内含 <issueNumber> 和 <articles>，每个 article 有 <title>、<content>、<author>、<column>）。`;
+    userInput = `请生成1期全新的"${sectionName}"报纸，包含${postCount}个栏目左右的文章，附带${commentCount}条左右的读者来信评论。${topicHint}\n注意：报纸主题和内容必须是全新的，不要重复历史期号已报道过的事件。\n以XML格式返回，仅1个 <post>，包含 <title>（报纸名称+期号）、<content>（主编寄语/导读）、<authorId>（主编ID）、<timestamp>、<likes>、<comments>，以及 <metadata>（内含 <issueNumber> 和 <articles>，每个 article 有 <title>、<content>、<author>、<column>）。`;
   } else {
-    userInput = `请为论坛"${sectionName}"板块批量生成${postCount}个左右的帖子，每个帖子附带${commentCount}条左右的评论。${topicHint}\n以XML格式返回，每个帖子用 <post>...</post> 包裹，包含 <title>、<content>、<authorId>、<timestamp>、<likes>、<comments>（内含 <comment>，每个 comment 有 <authorId>、<content>、<timestamp>）。`;
+    userInput = `请为论坛"${sectionName}"板块批量生成${postCount}个全新的帖子，每个帖子附带${commentCount}条左右的评论。${topicHint}\n重要提醒：\n1. 这些帖子必须是全新的独立讨论，不要重复、续写或回应历史帖子中的任何内容。\n2. 同一批次中每个帖子的主题必须完全不同。\n3. 评论中要有不同观点的碰撞，不要清一色附和。\n以XML格式返回，每个帖子用 <post>...</post> 包裹，包含 <title>、<content>、<authorId>、<timestamp>、<likes>、<comments>（内含 <comment>，每个 comment 有 <authorId>、<content>、<timestamp>）。`;
   }
   const result = settings.ZincludePresetContext
     ? await generate({
@@ -358,19 +384,19 @@ export async function generatePostsMerged(sectionIds: string[], topic?: string) 
 
   const topicHint = topic?.trim() ? `\n本次讨论方向/话题：${topic.trim()}` : '';
 
-  let userInput = `请分别为以下${sectionIds.length}个板块生成内容：\n\n`;
+  let userInput = `请分别为以下${sectionIds.length}个板块生成全新的内容：\n\n`;
   for (const id of sectionIds) {
     const name = store.getSectionName(id);
     const type = store.getSectionType(id);
     if (type === 'tournament') {
-      userInput += `【赛事】"${name}"：生成${postCount}场比赛战报，每场比赛附带${commentCount}条左右观众评论。每个帖子metadata包含teamA、teamB、score、winner、round。\n\n`;
+      userInput += `【赛事】"${name}"：生成${postCount}场全新的比赛战报，每场比赛附带${commentCount}条左右观众评论。每个帖子metadata包含teamA、teamB、score、winner、round。\n\n`;
     } else if (type === 'newspaper') {
-      userInput += `【报纸】"${name}"：生成1期报纸，包含${postCount}个栏目左右的文章，附带${commentCount}条左右读者来信。帖子metadata包含issueNumber和articles数组。\n\n`;
+      userInput += `【报纸】"${name}"：生成1期全新的报纸，包含${postCount}个栏目左右的文章，附带${commentCount}条左右读者来信。帖子metadata包含issueNumber和articles数组。\n\n`;
     } else {
-      userInput += `【论坛】"${name}"：生成${postCount}个左右的帖子，每个帖子附带${commentCount}条左右的评论。\n\n`;
+      userInput += `【论坛】"${name}"：生成${postCount}个全新的帖子，每个帖子附带${commentCount}条左右的评论。\n\n`;
     }
   }
-  userInput += `请确保各板块的内容风格严格区分，各自对应板块的设定要求。${topicHint}\n以XML格式返回，结构为：<section id="${sectionIds[0]}"><post>...</post></section> <section id="${sectionIds[1] || ''}"><post>...</post></section>...`;
+  userInput += `重要提醒：\n1. 各板块的内容风格必须严格区分。\n2. 每个板块内部的新帖子主题必须完全不同，严禁同质化。\n3. 不要重复、续写或回应历史帖子中的任何内容。\n4. 评论中必须有不同观点的碰撞。\n${topicHint}\n以XML格式返回，结构为：<section id="${sectionIds[0]}"><post>...</post></section> <section id="${sectionIds[1] || ''}"><post>...</post></section>...`;
 
   const customApi = buildCustomApi(settings);
   const hasCustomApi = Object.keys(customApi).length > 0;
@@ -434,7 +460,7 @@ export async function generateComments(sectionId: string, post: ForumPost) {
   const customApi = buildCustomApi(settings);
   const hasCustomApi = Object.keys(customApi).length > 0;
 
-  const userInput = `帖子标题：${post.title}\n帖子内容：${post.content}\n作者：${post.authorId}\n帖子时间：${post.timestamp}\n${existingComments ? `已有评论：\n${existingComments}\n` : ''}请为这个帖子生成${commentCount}条左右的评论，以XML格式返回。每个评论用 <comment>...</comment> 包裹，包含 <authorId>、<content> 和 <timestamp>（故事内时间）。`;
+  const userInput = `帖子标题：${post.title}\n帖子内容：${post.content}\n作者：${post.authorId}\n帖子时间：${post.timestamp}\n${existingComments ? `已有评论（注意：不要重复以下观点）：\n${existingComments}\n` : ''}\n请为这个帖子生成${commentCount}条左右的全新评论。要求：\n1. 评论观点必须与已有评论不同，严禁重复已有评论的立场或措辞\n2. 必须有支持、反对、质疑、调侃等不同声音，禁止清一色附和\n3. 严禁输出"同上""+1""附议"等无意义内容\n4. 以XML格式返回，每个评论用 <comment>...</comment> 包裹，包含 <authorId>、<content> 和 <timestamp>（故事内时间）。`;
   const result = settings.ZincludePresetContext
     ? await generate({
         user_input: userInput,
