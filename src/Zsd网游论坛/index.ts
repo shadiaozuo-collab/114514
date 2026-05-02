@@ -198,6 +198,19 @@ function openForum() {
     const windowControls = reactive({ requestClose: false });
     app = createApp(App);
     app.provide('windowControls', windowControls);
+    app.config.errorHandler = (err, instance, info) => {
+      console.error('[Zsd网游论坛] Vue 渲染错误:', err, info);
+      // 在 iframe body 中显示错误提示，避免透明空框
+      if (doc && doc.body && doc.body.children.length === 0) {
+        doc.body.innerHTML = `
+          <div style="padding: 20px; color: #ef4444; font-family: sans-serif; text-align: center;">
+            <div style="font-size: 14px; font-weight: bold; margin-bottom: 8px;">⚠️ 论坛加载失败</div>
+            <div style="font-size: 12px; color: #9ca3af;">${(err as Error)?.message || '未知错误'}</div>
+            <div style="font-size: 11px; color: #6b7280; margin-top: 12px;">请尝试刷新页面或切换对话后重试</div>
+          </div>
+        `;
+      }
+    };
     app.mount(doc.body);
 
     watch(() => windowControls.requestClose, v => {

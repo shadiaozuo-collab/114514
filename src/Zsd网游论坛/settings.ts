@@ -188,9 +188,12 @@ function migrateLegacySettings(vars: Record<string, any>) {
 
 const varOption = { type: 'chat' as const };
 
-try {
-  registerVariableSchema(SettingsSchema, varOption);
-} catch {}
+// 禁用 registerVariableSchema：JS-Slash-Runner 内嵌的 Zod 实现与标准 Zod 不兼容，
+// 会导致 schema 损坏并在后续变量访问时触发 `Cannot read properties of undefined (reading '_zod')` 错误。
+// registerVariableSchema 仅影响变量管理器 UI 的展示，对代码功能无影响。
+// try {
+//   registerVariableSchema(SettingsSchema, varOption);
+// } catch {}
 
 export const useForumSettingsStore = defineStore('forum-settings', () => {
   let suppressSync = false;
