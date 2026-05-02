@@ -198,10 +198,36 @@
       </div>
       <div>
         <label class="text-[11px] text-[var(--f-text-secondary)] block mb-1">模型名（留空使用酒馆当前模型）</label>
-        <input v-model="store.settings.Zmodel" list="model-suggestions" class="w-full text-xs px-2 py-1.5 rounded outline-none border focus:border-[var(--f-accent)]" :style="inputStyle" placeholder="如: gpt-4o-mini" />
-        <datalist id="model-suggestions">
-          <option v-for="m in suggestedModels" :key="m" :value="m">{{ m }}</option>
-        </datalist>
+        <!-- 下拉选择模式 -->
+        <div v-if="!isCustomModel && suggestedModels.length > 0" class="flex items-center gap-1">
+          <select
+            v-model="store.settings.Zmodel"
+            class="flex-1 text-xs px-2 py-1.5 rounded outline-none border focus:border-[var(--f-accent)]"
+            :style="inputStyle"
+            @change="if (store.settings.Zmodel === '__custom__') { store.settings.Zmodel = ''; isCustomModel = true; }"
+          >
+            <option value="">留空使用酒馆当前模型</option>
+            <option v-for="m in suggestedModels" :key="m" :value="m">{{ m }}</option>
+            <option value="__custom__">✎ 手动输入...</option>
+          </select>
+        </div>
+        <!-- 自定义输入模式（或没有建议模型时） -->
+        <div v-else class="flex items-center gap-1">
+          <input
+            v-model="store.settings.Zmodel"
+            class="flex-1 text-xs px-2 py-1.5 rounded outline-none border focus:border-[var(--f-accent)]"
+            :style="inputStyle"
+            placeholder="输入模型名"
+          />
+          <button
+            v-if="suggestedModels.length > 0"
+            class="text-[10px] px-2 py-1.5 rounded border transition-colors shrink-0"
+            :style="{ backgroundColor: 'var(--f-accent-dim)', color: 'var(--f-accent)', borderColor: 'var(--f-accent)' }"
+            @click="isCustomModel = false"
+          >
+            <i class="fa-solid fa-list"></i> 列表
+          </button>
+        </div>
         <div class="flex items-center gap-1 mt-1">
           <button
             class="flex-1 text-[10px] px-2 py-1 rounded border transition-colors"
@@ -425,6 +451,7 @@ function addSection() {
 const savePresetName = ref('');
 const selectedPresetName = ref('');
 const isLoadingModels = ref(false);
+const isCustomModel = ref(false);
 
 function savePreset() {
   const name = savePresetName.value.trim();
