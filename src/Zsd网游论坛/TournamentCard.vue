@@ -66,6 +66,41 @@
       {{ post.content }}
     </div>
 
+    <!-- 列表评论预览 -->
+    <div v-if="post.comments.length > 0" class="mt-2 pt-2 border-t border-[var(--f-border)]">
+      <template v-if="store.settings.ZshowCommentsInList || isExpanded">
+        <div class="space-y-1">
+          <div
+            v-for="comment in visibleComments"
+            :key="comment.id"
+            class="text-[10px] text-[var(--f-text-muted)] flex items-start gap-1"
+            @click.stop
+          >
+            <i class="fa-solid fa-comment text-[8px] mt-0.5 shrink-0" :style="{ color: 'var(--f-text-muted)' }"></i>
+            <span class="truncate">
+              <span class="text-[var(--f-author)] font-medium">{{ comment.authorId }}</span>:
+              <span class="text-[var(--f-text-secondary)]">{{ comment.content }}</span>
+            </span>
+          </div>
+        </div>
+        <button
+          v-if="post.comments.length > previewLimit"
+          class="text-[9px] text-[var(--f-accent)] hover:underline mt-1"
+          @click.stop="isExpanded = !isExpanded"
+        >
+          {{ isExpanded ? '收起评论' : `展开全部 ${post.comments.length} 条` }}
+        </button>
+      </template>
+      <button
+        v-else
+        class="text-[9px] text-[var(--f-text-muted)] hover:text-[var(--f-accent)] flex items-center gap-1"
+        @click.stop="isExpanded = true"
+      >
+        <i class="fa-solid fa-chevron-down text-[8px]"></i>
+        {{ post.comments.length }} 条评论
+      </button>
+    </div>
+
     <!-- 底部操作栏 -->
     <div class="flex items-center justify-between pt-2 border-t border-[var(--f-border)]">
       <div class="flex items-center gap-2">
@@ -84,13 +119,21 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useForumSettingsStore } from './settings';
 import type { ForumPost } from './types';
 
 const store = useForumSettingsStore();
 const props = defineProps<{ post: ForumPost }>();
 defineEmits<{ click: []; delete: [postId: string] }>();
+
+const isExpanded = ref(false);
+const previewLimit = 2;
+
+const visibleComments = computed(() => {
+  if (isExpanded.value) return props.post.comments;
+  return props.post.comments.slice(0, previewLimit);
+});
 
 const m = computed(() => props.post.metadata || {});
 

@@ -192,6 +192,13 @@
         </div>
       </div>
       <div class="flex items-center gap-2">
+        <input v-model="store.settings.ZshowCommentsInList" type="checkbox" class="accent-blue-500" />
+        <div>
+          <label class="text-[11px] text-[var(--f-text-secondary)]">列表中显示评论预览</label>
+          <p class="text-[10px]" :style="{ color: 'var(--f-text-muted)' }">开启后帖子列表默认展开评论，关闭时可点击展开</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
         <input v-model="store.settings.ZincludePresetContext" type="checkbox" class="accent-blue-500" />
         <div>
           <label class="text-[11px] text-[var(--f-text-secondary)]">带入酒馆预设上下文</label>
