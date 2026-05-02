@@ -337,32 +337,57 @@ export async function generatePosts(sectionId: string, topic?: string) {
   } else {
     userInput = `请为论坛"${sectionName}"板块批量生成${postCount}个全新的帖子，每个帖子附带${commentCount}条左右的评论。${topicHint}\n重要提醒：\n1. 这些帖子必须是全新的独立讨论，不要重复、续写或回应历史帖子中的任何内容。\n2. 同一批次中每个帖子的主题必须完全不同。\n3. 评论中要有不同观点的碰撞，不要清一色附和。\n以XML格式返回，每个帖子用 <post>...</post> 包裹，包含 <title>、<content>、<authorId>、<timestamp>、<likes>、<comments>（内含 <comment>，每个 comment 有 <authorId>、<content>、<timestamp>）。`;
   }
-  const result = settings.ZincludePresetContext
-    ? await generate({
-        user_input: userInput,
-        should_silence: true,
-        custom_api: hasCustomApi ? customApi : undefined,
-        max_chat_history: settings.ZinjectChatHistoryCount,
-        injects: [{ role: 'system', content: systemPrompt, position: 'in_chat', depth: 0, should_scan: true }],
-      })
-    : await generateRaw({
-        user_input: userInput,
-        should_silence: true,
-        custom_api: hasCustomApi ? customApi : undefined,
-        max_chat_history: settings.ZinjectChatHistoryCount,
-        ordered_prompts: [
-          'world_info_before',
-          'world_info_after',
-          'chat_history',
-          { role: 'system', content: systemPrompt },
-          'user_input',
-        ],
-      });
+  const startTime = Date.now();
+  let rawResponse = '';
+  let parsedCount = 0;
+  let error: string | undefined;
 
-  const parsed = safeXmlParse(result as string);
-  const posts = parseRawPosts(parsed.posts || [], sectionId, SillyTavern.getContext().chat.length - 1);
-  recordPostIdsToMessage({ [sectionId]: posts });
-  return posts;
+  try {
+    const result = settings.ZincludePresetContext
+      ? await generate({
+          user_input: userInput,
+          should_silence: true,
+          custom_api: hasCustomApi ? customApi : undefined,
+          max_chat_history: settings.ZinjectChatHistoryCount,
+          injects: [{ role: 'system', content: systemPrompt, position: 'in_chat', depth: 0, should_scan: true }],
+        })
+      : await generateRaw({
+          user_input: userInput,
+          should_silence: true,
+          custom_api: hasCustomApi ? customApi : undefined,
+          max_chat_history: settings.ZinjectChatHistoryCount,
+          ordered_prompts: [
+            'world_info_before',
+            'world_info_after',
+            'chat_history',
+            { role: 'system', content: systemPrompt },
+            'user_input',
+          ],
+        });
+    rawResponse = String(result);
+    const parsed = safeXmlParse(rawResponse);
+    const posts = parseRawPosts(parsed.posts || [], sectionId, SillyTavern.getContext().chat.length - 1);
+    parsedCount = posts.length;
+    recordPostIdsToMessage({ [sectionId]: posts });
+    return posts;
+  } catch (e: any) {
+    error = e?.message || String(e);
+    throw e;
+  } finally {
+    store.addGenerationLog({
+      timestamp: Date.now(),
+      type: 'posts',
+      sectionId,
+      sectionName,
+      topic,
+      userInput,
+      systemPrompt,
+      rawResponse,
+      parsedCount,
+      error,
+      durationMs: Date.now() - startTime,
+    });
+  }
 }
 
 export async function generatePostsMerged(sectionIds: string[], topic?: string) {
@@ -412,36 +437,63 @@ export async function generatePostsMerged(sectionIds: string[], topic?: string) 
   const customApi = buildCustomApi(settings);
   const hasCustomApi = Object.keys(customApi).length > 0;
 
-  const result = settings.ZincludePresetContext
-    ? await generate({
-        user_input: userInput,
-        should_silence: true,
-        custom_api: hasCustomApi ? customApi : undefined,
-        max_chat_history: settings.ZinjectChatHistoryCount,
-        injects: [{ role: 'system', content: combinedSystemPrompt, position: 'in_chat', depth: 0, should_scan: true }],
-      })
-    : await generateRaw({
-        user_input: userInput,
-        should_silence: true,
-        custom_api: hasCustomApi ? customApi : undefined,
-        max_chat_history: settings.ZinjectChatHistoryCount,
-        ordered_prompts: [
-          'world_info_before',
-          'world_info_after',
-          'chat_history',
-          { role: 'system', content: combinedSystemPrompt },
-          'user_input',
-        ],
-      });
+  const startTime = Date.now();
+  let rawResponse = '';
+  let parsedCount = 0;
+  let error: string | undefined;
 
-  const parsed = safeXmlParse(result as string, { sectionIds });
-  const sourceIndex = SillyTavern.getContext().chat.length - 1;
-  const resultMap: Record<string, ForumPost[]> = {};
-  for (const id of sectionIds) {
-    resultMap[id] = parseRawPosts(parsed[id]?.posts || [], id, sourceIndex);
+  try {
+    const result = settings.ZincludePresetContext
+      ? await generate({
+          user_input: userInput,
+          should_silence: true,
+          custom_api: hasCustomApi ? customApi : undefined,
+          max_chat_history: settings.ZinjectChatHistoryCount,
+          injects: [{ role: 'system', content: combinedSystemPrompt, position: 'in_chat', depth: 0, should_scan: true }],
+        })
+      : await generateRaw({
+          user_input: userInput,
+          should_silence: true,
+          custom_api: hasCustomApi ? customApi : undefined,
+          max_chat_history: settings.ZinjectChatHistoryCount,
+          ordered_prompts: [
+            'world_info_before',
+            'world_info_after',
+            'chat_history',
+            { role: 'system', content: combinedSystemPrompt },
+            'user_input',
+          ],
+        });
+    rawResponse = String(result);
+    const parsed = safeXmlParse(rawResponse, { sectionIds });
+    const sourceIndex = SillyTavern.getContext().chat.length - 1;
+    const resultMap: Record<string, ForumPost[]> = {};
+    for (const id of sectionIds) {
+      const posts = parseRawPosts(parsed[id]?.posts || [], id, sourceIndex);
+      resultMap[id] = posts;
+      parsedCount += posts.length;
+    }
+    recordPostIdsToMessage(resultMap);
+    return resultMap;
+  } catch (e: any) {
+    error = e?.message || String(e);
+    throw e;
+  } finally {
+    const sectionNames = sectionIds.map(id => store.getSectionName(id)).join(', ');
+    store.addGenerationLog({
+      timestamp: Date.now(),
+      type: 'merged_posts',
+      sectionId: sectionIds.join(','),
+      sectionName: sectionNames,
+      topic,
+      userInput,
+      systemPrompt: combinedSystemPrompt,
+      rawResponse,
+      parsedCount,
+      error,
+      durationMs: Date.now() - startTime,
+    });
   }
-  recordPostIdsToMessage(resultMap);
-  return resultMap;
 }
 
 /** 独立模式：逐个板块单独生成 */
@@ -475,36 +527,62 @@ export async function generateComments(sectionId: string, post: ForumPost) {
   const hasCustomApi = Object.keys(customApi).length > 0;
 
   const userInput = `帖子标题：${post.title}\n帖子内容：${post.content}\n作者：${post.authorId}\n帖子时间：${post.timestamp}\n${existingComments ? `已有评论（注意：不要重复以下观点）：\n${existingComments}\n` : ''}\n请为这个帖子生成${commentCount}条左右的全新评论。要求：\n1. 评论观点必须与已有评论不同，严禁重复已有评论的立场或措辞\n2. 必须有支持、反对、质疑、调侃等不同声音，禁止清一色附和\n3. 严禁输出"同上""+1""附议"等无意义内容\n4. 以XML格式返回，每个评论用 <comment>...</comment> 包裹，包含 <authorId>、<content> 和 <timestamp>（故事内时间）。`;
-  const result = settings.ZincludePresetContext
-    ? await generate({
-        user_input: userInput,
-        should_silence: true,
-        custom_api: hasCustomApi ? customApi : undefined,
-        max_chat_history: settings.ZinjectChatHistoryCount,
-        injects: [{ role: 'system', content: systemPrompt, position: 'in_chat', depth: 0, should_scan: true }],
-      })
-    : await generateRaw({
-        user_input: userInput,
-        should_silence: true,
-        custom_api: hasCustomApi ? customApi : undefined,
-        max_chat_history: settings.ZinjectChatHistoryCount,
-        ordered_prompts: [
-          'world_info_before',
-          'world_info_after',
-          'chat_history',
-          { role: 'system', content: systemPrompt },
-          'user_input',
-        ],
-      });
+  const startTime = Date.now();
+  let rawResponse = '';
+  let parsedCount = 0;
+  let error: string | undefined;
+  const sectionName = store.getSectionName(sectionId);
 
-  const parsed = safeXmlParse(result as string);
-  return (parsed.comments || []).map((c: any) => ({
-    id: generateId(),
-    authorId: c.authorId || '匿名用户',
-    content: c.content || '',
-    timestamp: c.timestamp || '',
-    isAiGenerated: true,
-  })) as ForumComment[];
+  try {
+    const result = settings.ZincludePresetContext
+      ? await generate({
+          user_input: userInput,
+          should_silence: true,
+          custom_api: hasCustomApi ? customApi : undefined,
+          max_chat_history: settings.ZinjectChatHistoryCount,
+          injects: [{ role: 'system', content: systemPrompt, position: 'in_chat', depth: 0, should_scan: true }],
+        })
+      : await generateRaw({
+          user_input: userInput,
+          should_silence: true,
+          custom_api: hasCustomApi ? customApi : undefined,
+          max_chat_history: settings.ZinjectChatHistoryCount,
+          ordered_prompts: [
+            'world_info_before',
+            'world_info_after',
+            'chat_history',
+            { role: 'system', content: systemPrompt },
+            'user_input',
+          ],
+        });
+    rawResponse = String(result);
+    const parsed = safeXmlParse(rawResponse);
+    const comments = (parsed.comments || []).map((c: any) => ({
+      id: generateId(),
+      authorId: c.authorId || '匿名用户',
+      content: c.content || '',
+      timestamp: c.timestamp || '',
+      isAiGenerated: true,
+    })) as ForumComment[];
+    parsedCount = comments.length;
+    return comments;
+  } catch (e: any) {
+    error = e?.message || String(e);
+    throw e;
+  } finally {
+    store.addGenerationLog({
+      timestamp: Date.now(),
+      type: 'comments',
+      sectionId,
+      sectionName,
+      userInput,
+      systemPrompt,
+      rawResponse,
+      parsedCount,
+      error,
+      durationMs: Date.now() - startTime,
+    });
+  }
 }
 
 // 注入管理

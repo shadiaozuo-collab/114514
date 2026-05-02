@@ -148,67 +148,161 @@
     <div v-if="forumStore.showGenDialog && !showSettings" class="absolute inset-0 z-20 flex flex-col p-3" :style="{ backgroundColor: 'var(--f-bg)' }">
       <div class="flex items-center justify-between mb-3">
         <span class="text-sm font-bold text-[var(--f-text)]">
-          <i class="fa-solid fa-robot text-[var(--f-accent)]"></i> {{ genDialogTitle }}
+          <i class="fa-solid fa-robot text-[var(--f-accent)]"></i> {{ forumStore.showGenLog ? '生成日志' : genDialogTitle }}
         </span>
-        <button class="text-[var(--f-text-secondary)] hover:text-[var(--f-text)]" @click="forumStore.closeGenDialog()">
-          <i class="fa-solid fa-xmark"></i>
+        <div class="flex items-center gap-2">
+          <button
+            v-if="!forumStore.showGenLog"
+            class="text-[10px] px-1.5 py-0.5 rounded border text-[var(--f-text-secondary)] hover:text-[var(--f-text)] hover:border-[var(--f-text)] transition-colors"
+            :style="{ borderColor: 'var(--f-border)' }"
+            @click="forumStore.openGenLog()"
+          >
+            <i class="fa-solid fa-clipboard-list"></i> 日志
+          </button>
+          <button
+            v-else
+            class="text-[10px] px-1.5 py-0.5 rounded border text-[var(--f-text-secondary)] hover:text-[var(--f-text)] hover:border-[var(--f-text)] transition-colors"
+            :style="{ borderColor: 'var(--f-border)' }"
+            @click="forumStore.closeGenLog()"
+          >
+            <i class="fa-solid fa-arrow-left"></i> 返回
+          </button>
+          <button class="text-[var(--f-text-secondary)] hover:text-[var(--f-text)]" @click="forumStore.closeGenDialog(); forumStore.closeGenLog()">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- 生成设置 -->
+      <template v-if="!forumStore.showGenLog">
+        <div class="space-y-3 flex-1 overflow-y-auto">
+          <div>
+            <label class="text-[11px] text-[var(--f-text-secondary)] block mb-1">生成模式</label>
+            <div class="flex gap-2 text-[11px]">
+              <label class="flex items-center gap-1 cursor-pointer">
+                <input v-model="genMode" type="radio" value="single" class="accent-[var(--f-accent)]">
+                <span>仅当前板块</span>
+              </label>
+              <label class="flex items-center gap-1 cursor-pointer">
+                <input v-model="genMode" type="radio" value="merged" class="accent-[var(--f-accent)]">
+                <span>合并生成</span>
+              </label>
+              <label class="flex items-center gap-1 cursor-pointer">
+                <input v-model="genMode" type="radio" value="sequential" class="accent-[var(--f-accent)]">
+                <span>独立生成</span>
+              </label>
+            </div>
+            <p v-if="genMode === 'merged' && settingsStore.settings.Zsections.length > 3" class="text-[10px] text-[var(--f-danger)] mt-1">
+              <i class="fa-solid fa-triangle-exclamation"></i> 板块超过3个时，合并生成可能不可靠，建议使用独立生成
+            </p>
+          </div>
+          <div v-if="genMode !== 'single'">
+            <label class="text-[11px] text-[var(--f-text-secondary)] block mb-1">选择板块</label>
+            <div class="flex flex-wrap gap-2 text-[11px]">
+              <label v-for="sec in settingsStore.settings.Zsections" :key="sec.id" class="flex items-center gap-1 cursor-pointer">
+                <input
+                  v-model="selectedSections"
+                  type="checkbox"
+                  :value="sec.id"
+                  class="accent-[var(--f-accent)]"
+                >
+                <span>{{ sec.name }}</span>
+              </label>
+            </div>
+          </div>
+          <div>
+            <label class="text-[11px] text-[var(--f-text-secondary)] block mb-1">讨论方向 / 话题关键词（可选，留空则由 AI 自由发挥）</label>
+            <textarea
+              v-model="genTopic"
+              class="w-full text-xs px-2 py-1.5 rounded outline-none border focus:border-[var(--f-accent)] resize-none"
+              :style="{ backgroundColor: 'var(--f-bg-input)', color: 'var(--f-text)', borderColor: 'var(--f-border-hover)' }"
+              rows="3"
+              placeholder="例如：最近更新的新副本、PK大赛、装备强化黑幕、生活玩家日常…&#10;多个话题可以用逗号或换行分隔"
+            ></textarea>
+          </div>
+        </div>
+        <button
+          class="w-full text-xs text-white py-2 rounded disabled:opacity-50 mt-2 flex items-center justify-center gap-1 transition-colors"
+          :class="forumStore.isGenerating ? 'bg-[var(--f-bg-input)] cursor-wait' : 'bg-[var(--f-accent-bg)] hover:bg-[var(--f-accent-bg-hover)]'"
+          :disabled="forumStore.isGenerating || (genMode !== 'single' && selectedSections.length === 0)"
+          @click="handleBatchGenerate"
+        >
+          <i v-if="forumStore.isGenerating" class="fa-solid fa-spinner fa-spin"></i>
+          {{ forumStore.isGenerating ? '生成中，请稍候...' : '开始生成' }}
         </button>
-      </div>
-      <div class="space-y-3 flex-1 overflow-y-auto">
-        <div>
-          <label class="text-[11px] text-[var(--f-text-secondary)] block mb-1">生成模式</label>
-          <div class="flex gap-2 text-[11px]">
-            <label class="flex items-center gap-1 cursor-pointer">
-              <input v-model="genMode" type="radio" value="single" class="accent-[var(--f-accent)]">
-              <span>仅当前板块</span>
-            </label>
-            <label class="flex items-center gap-1 cursor-pointer">
-              <input v-model="genMode" type="radio" value="merged" class="accent-[var(--f-accent)]">
-              <span>合并生成</span>
-            </label>
-            <label class="flex items-center gap-1 cursor-pointer">
-              <input v-model="genMode" type="radio" value="sequential" class="accent-[var(--f-accent)]">
-              <span>独立生成</span>
-            </label>
+      </template>
+
+      <!-- 日志面板 -->
+      <template v-else>
+        <div class="flex-1 overflow-y-auto space-y-2">
+          <div v-if="settingsStore.generationLogs.length === 0" class="text-center text-[var(--f-text-muted)] text-xs py-8">
+            <i class="fa-solid fa-inbox mb-1 block text-lg"></i>
+            暂无生成记录
           </div>
-          <p v-if="genMode === 'merged' && settingsStore.settings.Zsections.length > 3" class="text-[10px] text-[var(--f-danger)] mt-1">
-            <i class="fa-solid fa-triangle-exclamation"></i> 板块超过3个时，合并生成可能不可靠，建议使用独立生成
-          </p>
-        </div>
-        <div v-if="genMode !== 'single'">
-          <label class="text-[11px] text-[var(--f-text-secondary)] block mb-1">选择板块</label>
-          <div class="flex flex-wrap gap-2 text-[11px]">
-            <label v-for="sec in settingsStore.settings.Zsections" :key="sec.id" class="flex items-center gap-1 cursor-pointer">
-              <input
-                v-model="selectedSections"
-                type="checkbox"
-                :value="sec.id"
-                class="accent-[var(--f-accent)]"
-              >
-              <span>{{ sec.name }}</span>
-            </label>
+          <div
+            v-for="log in settingsStore.generationLogs"
+            :key="log.id"
+            class="rounded border p-2 text-[11px] cursor-pointer transition-colors"
+            :style="{
+              backgroundColor: 'var(--f-bg-card)',
+              borderColor: expandedLogId === log.id ? 'var(--f-accent)' : 'var(--f-border)',
+            }"
+            @click="toggleLogExpand(log.id)"
+          >
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-1.5 min-w-0">
+                <span
+                  class="inline-block w-1.5 h-1.5 rounded-full shrink-0"
+                  :style="{ backgroundColor: log.error ? 'var(--f-danger)' : log.parsedCount === 0 ? '#f59e0b' : 'var(--f-author)' }"
+                ></span>
+                <span class="font-medium truncate">{{ logTypeLabel(log.type) }} · {{ log.sectionName }}</span>
+              </div>
+              <span class="text-[var(--f-text-muted)] shrink-0">{{ formatLogTime(log.timestamp) }}</span>
+            </div>
+            <div class="flex items-center justify-between mt-1 text-[10px] text-[var(--f-text-secondary)]">
+              <span>
+                <span v-if="log.error" class="text-[var(--f-danger)]"><i class="fa-solid fa-circle-xmark"></i> {{ log.error }}</span>
+                <span v-else-if="log.parsedCount === 0" class="text-amber-400"><i class="fa-solid fa-triangle-exclamation"></i> 解析出 0 条</span>
+                <span v-else class="text-[var(--f-author)]"><i class="fa-solid fa-check"></i> {{ log.parsedCount }} 条</span>
+                <span v-if="log.topic" class="ml-1 opacity-70">· {{ log.topic }}</span>
+              </span>
+              <span>{{ (log.durationMs / 1000).toFixed(1) }}s</span>
+            </div>
+            <!-- 展开详情 -->
+            <div v-if="expandedLogId === log.id" class="mt-2 space-y-2 border-t pt-2" :style="{ borderColor: 'var(--f-border)' }">
+              <div>
+                <div class="flex items-center justify-between mb-0.5">
+                  <span class="text-[10px] font-bold text-[var(--f-text-secondary)]">System Prompt</span>
+                  <button class="text-[10px] text-[var(--f-accent)]" @click.stop="copyText(log.systemPrompt)">复制</button>
+                </div>
+                <pre class="max-h-32 overflow-y-auto rounded p-1.5 text-[10px] whitespace-pre-wrap break-all" :style="{ backgroundColor: 'var(--f-bg-input)' }">{{ log.systemPrompt }}</pre>
+              </div>
+              <div>
+                <div class="flex items-center justify-between mb-0.5">
+                  <span class="text-[10px] font-bold text-[var(--f-text-secondary)]">User Input</span>
+                  <button class="text-[10px] text-[var(--f-accent)]" @click.stop="copyText(log.userInput)">复制</button>
+                </div>
+                <pre class="max-h-32 overflow-y-auto rounded p-1.5 text-[10px] whitespace-pre-wrap break-all" :style="{ backgroundColor: 'var(--f-bg-input)' }">{{ log.userInput }}</pre>
+              </div>
+              <div>
+                <div class="flex items-center justify-between mb-0.5">
+                  <span class="text-[10px] font-bold text-[var(--f-text-secondary)]">Raw Response</span>
+                  <button class="text-[10px] text-[var(--f-accent)]" @click.stop="copyText(log.rawResponse)">复制</button>
+                </div>
+                <pre class="max-h-48 overflow-y-auto rounded p-1.5 text-[10px] whitespace-pre-wrap break-all" :style="{ backgroundColor: 'var(--f-bg-input)' }">{{ log.rawResponse || '（无返回内容）' }}</pre>
+              </div>
+            </div>
           </div>
         </div>
-        <div>
-          <label class="text-[11px] text-[var(--f-text-secondary)] block mb-1">讨论方向 / 话题关键词（可选，留空则由 AI 自由发挥）</label>
-          <textarea
-            v-model="genTopic"
-            class="w-full text-xs px-2 py-1.5 rounded outline-none border focus:border-[var(--f-accent)] resize-none"
-            :style="{ backgroundColor: 'var(--f-bg-input)', color: 'var(--f-text)', borderColor: 'var(--f-border-hover)' }"
-            rows="3"
-            placeholder="例如：最近更新的新副本、PK大赛、装备强化黑幕、生活玩家日常…&#10;多个话题可以用逗号或换行分隔"
-          ></textarea>
-        </div>
-      </div>
-      <button
-        class="w-full text-xs text-white py-2 rounded disabled:opacity-50 mt-2 flex items-center justify-center gap-1 transition-colors"
-        :class="forumStore.isGenerating ? 'bg-[var(--f-bg-input)] cursor-wait' : 'bg-[var(--f-accent-bg)] hover:bg-[var(--f-accent-bg-hover)]'"
-        :disabled="forumStore.isGenerating || (genMode !== 'single' && selectedSections.length === 0)"
-        @click="handleBatchGenerate"
-      >
-        <i v-if="forumStore.isGenerating" class="fa-solid fa-spinner fa-spin"></i>
-        {{ forumStore.isGenerating ? '生成中，请稍候...' : '开始生成' }}
-      </button>
+        <button
+          v-if="settingsStore.generationLogs.length > 0"
+          class="w-full text-xs py-2 rounded mt-2 flex items-center justify-center gap-1 transition-colors"
+          :style="{ backgroundColor: 'var(--f-danger-bg)', color: 'var(--f-danger)', border: '1px solid var(--f-danger)' }"
+          @click="settingsStore.clearGenerationLogs()"
+        >
+          <i class="fa-solid fa-trash-can"></i> 清空日志
+        </button>
+      </template>
     </div>
 
     <SettingsPanel v-if="showSettings" @close="showSettings = false" />
@@ -317,6 +411,39 @@ function openGenDialog() {
   genMode.value = 'single';
   selectedSections.value = [forumStore.activeSection];
   forumStore.openGenDialog();
+}
+
+// ── 生成日志辅助 ──
+const expandedLogId = ref<string | null>(null);
+
+function toggleLogExpand(id: string) {
+  expandedLogId.value = expandedLogId.value === id ? null : id;
+}
+
+function logTypeLabel(type: string) {
+  if (type === 'posts') return '帖子';
+  if (type === 'comments') return '评论';
+  if (type === 'merged_posts') return '合并帖子';
+  return type;
+}
+
+function formatLogTime(ts: number) {
+  const d = new Date(ts);
+  const now = new Date();
+  const isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const timeStr = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  if (isToday) return timeStr;
+  return `${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${timeStr}`;
+}
+
+async function copyText(text: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toastr.success('已复制到剪贴板');
+  } catch {
+    toastr.error('复制失败');
+  }
 }
 
 async function handleBatchGenerate() {

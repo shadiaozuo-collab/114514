@@ -3,6 +3,10 @@ import { defineStore } from 'pinia';
 import { klona } from 'klona';
 import type { ForumPost, ForumComment } from './types';
 
+function generateId() {
+  return Date.now().toString(36) + Math.random().toString(36).substring(2, 8);
+}
+
 const Timestamp = z.union([z.string(), z.number()]).transform(v => String(v));
 
 const CommentSchema = z.object({
@@ -242,6 +246,22 @@ const SettingsSchema = z.object({
   ZminReplyLength: z.coerce.number().min(0).default(30),
   ZenableLikes: z.boolean().default(true),
 });
+
+// ── 生成日志 ──
+export interface GenerationLog {
+  id: string;
+  timestamp: number;
+  type: 'posts' | 'comments' | 'merged_posts';
+  sectionId: string;
+  sectionName: string;
+  topic?: string;
+  userInput: string;
+  systemPrompt: string;
+  rawResponse: string;
+  parsedCount: number;
+  error?: string;
+  durationMs: number;
+}
 
 function migrateLegacySettings(vars: Record<string, any>) {
   const result = { ...vars };
@@ -513,6 +533,38 @@ export const useForumSettingsStore = defineStore('forum-settings', () => {
     insertOrAssignVariables(apiConfig, globalVarOption);
   }
 
+  // ── 生成日志管理 ──
+  const generationLogs = ref<GenerationLog[]>([]);
+
+  function loadGenerationLogs() {
+    try {
+      const vars = getVariables(varOption);
+      if (Array.isArray(vars.ZgenerationLogs)) {
+        generationLogs.value = vars.ZgenerationLogs.slice(-10);
+      }
+    } catch {}
+  }
+
+  function addGenerationLog(log: Omit<GenerationLog, 'id'>) {
+    const fullLog: GenerationLog = { ...log, id: generateId() };
+    generationLogs.value.unshift(fullLog);
+    if (generationLogs.value.length > 10) generationLogs.value.pop();
+    try {
+      insertOrAssignVariables({ ZgenerationLogs: generationLogs.value }, varOption);
+    } catch (e) {
+      console.warn('[网游论坛] 保存生成日志失败:', e);
+    }
+  }
+
+  function clearGenerationLogs() {
+    generationLogs.value = [];
+    try {
+      insertOrAssignVariables({ ZgenerationLogs: [] }, varOption);
+    } catch {}
+  }
+
+  loadGenerationLogs();
+
   return {
     settings,
     addPost,
@@ -529,6 +581,9 @@ export const useForumSettingsStore = defineStore('forum-settings', () => {
     saveApiPreset,
     deleteApiPreset,
     forceSync,
+    generationLogs,
+    addGenerationLog,
+    clearGenerationLogs,
   };
 });
 
@@ -539,6 +594,7 @@ export const useForumUiStore = defineStore('forum-ui', () => {
   const isGenerating = ref(false);
   const showEditor = ref(false);
   const showGenDialog = ref(false);
+  const showGenLog = ref(false);
   const editorMode = ref<'post' | 'comment'>('post');
   const generationStartTime = ref<number>(0);
   const generationElapsed = ref<number>(0);
@@ -591,6 +647,14 @@ export const useForumUiStore = defineStore('forum-ui', () => {
     showGenDialog.value = false;
   }
 
+  function openGenLog() {
+    showGenLog.value = true;
+  }
+
+  function closeGenLog() {
+    showGenLog.value = false;
+  }
+
   function startGenerationTimer() {
     generationStartTime.value = Date.now();
     generationElapsed.value = 0;
@@ -627,6 +691,7 @@ export const useForumUiStore = defineStore('forum-ui', () => {
     isGenerating,
     showEditor,
     showGenDialog,
+    showGenLog,
     editorMode,
     generationStartTime,
     generationElapsed,
@@ -642,6 +707,8 @@ export const useForumUiStore = defineStore('forum-ui', () => {
     closeEditor,
     openGenDialog,
     closeGenDialog,
+    openGenLog,
+    closeGenLog,
     startGenerationTimer,
     stopGenerationTimer,
     abortGeneration,
