@@ -177,7 +177,7 @@ function openForum() {
     }
   });
 
-  $iframe.on('load', () => {
+  function initIframe() {
     if (!$iframe) return;
     const doc = $iframe[0].contentDocument;
     if (!doc) {
@@ -214,6 +214,15 @@ function openForum() {
     injectForumContext();
     setupAutoInject();
     setupAutoGenerate();
+  }
+
+  $iframe.on('load', initIframe);
+
+  // 防御 race condition：如果 iframe 已经加载完成（缓存/快速加载），直接初始化
+  requestAnimationFrame(() => {
+    if ($iframe && $iframe[0].contentDocument?.readyState === 'complete') {
+      initIframe();
+    }
   });
 }
 
