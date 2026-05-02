@@ -59,7 +59,8 @@ jobs:
         if: github.repository != 'StageDog/tavern_helper_template'
         run: |
           git fetch --tags
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          # 使用版本号排序获取最新 tag，避免字母排序陷阱（v2.4.9 > v2.4.14）
+          LATEST_TAG=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n 1 || echo "v0.0.0")
           echo "Latest tag: $LATEST_TAG"
 
           VERSION=${LATEST_TAG#v}
@@ -90,5 +91,11 @@ jobs:
 
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git tag "$NEW_TAG"
-          git push origin "$NEW_TAG"
+
+          # 避免 tag 冲突导致 workflow 失败
+          if git rev-parse "$NEW_TAG" >/dev/null 2>&1; then
+            echo "Tag $NEW_TAG already exists, skipping tag creation."
+          else
+            git tag "$NEW_TAG"
+            git push origin "$NEW_TAG"
+          fi
