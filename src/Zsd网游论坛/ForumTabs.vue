@@ -35,13 +35,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, inject } from 'vue';
 import { useForumSettingsStore } from './settings';
 
 defineProps<{ activeSection: string }>();
 defineEmits<{ switch: [sectionId: string]; toggleSettings: []; close: [] }>();
 
-const isMobile = ('ontouchstart' in window || navigator.maxTouchPoints > 0) && window.innerWidth <= 768;
+// 从 index.ts 注入真实的设备类型，避免 iframe 内 window.innerWidth 误判
+const isMobile = inject<boolean>('isMobile', false);
 
 const settingsStore = useForumSettingsStore();
 const tabs = computed(() =>

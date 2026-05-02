@@ -207,6 +207,8 @@
 
 <script setup lang="ts">
 import { ref, inject, computed, watch } from 'vue';
+
+const isMobile = inject<boolean>('isMobile', false);
 import type { ForumPost, ForumComment } from './types';
 import { useForumSettingsStore, useForumUiStore } from './settings';
 import { generatePosts, generatePostsMerged, generatePostsSequential, generateComments, injectForumContext } from './aiGenerator';

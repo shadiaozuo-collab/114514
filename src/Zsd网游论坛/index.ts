@@ -52,15 +52,18 @@ function openForum() {
     transform: 'translateX(-50%)',
     width: '92vw',
     maxWidth: '480px',
-    height: '85vh',
+    height: '80dvh',
+    maxHeight: 'calc(100dvh - 32px)',
     zIndex: '100000',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '16px 16px 0 0',
-    boxShadow: '0 -4px 20px rgba(0,0,0,0.5)',
+    border: '1px solid rgba(255,255,255,0.15)',
+    borderRadius: '20px 20px 0 0',
+    boxShadow: '0 -8px 32px rgba(0,0,0,0.55)',
     overflow: 'hidden',
     display: 'flex',
     flexDirection: 'column',
     backgroundColor: 'transparent',
+    boxSizing: 'border-box',
+    paddingBottom: 'env(safe-area-inset-bottom)',
   } : {
     position: 'fixed',
     top: '80px',
@@ -78,21 +81,37 @@ function openForum() {
   });
 
   const $header = $('<div>').addClass('zsd-forum-drag-handle').css({
-    height: '28px',
-    minHeight: '28px',
-    cursor: isMobile ? 'default' : 'grab',
+    height: isMobile ? '40px' : '28px',
+    minHeight: isMobile ? '40px' : '28px',
+    cursor: isMobile ? 'pointer' : 'grab',
     flexShrink: '0',
-    borderRadius: isMobile ? '16px 16px 0 0' : '8px 8px 0 0',
+    borderRadius: isMobile ? '20px 20px 0 0' : '8px 8px 0 0',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     fontSize: '11px',
     fontWeight: 'bold',
     userSelect: 'none',
-    touchAction: 'none',
+    touchAction: isMobile ? 'pan-y' : 'none',
     WebkitTouchCallout: 'none',
     WebkitUserSelect: 'none',
+    position: 'relative',
   });
+
+  // 手机端：添加底部Sheet风格的抓取指示条
+  if (isMobile) {
+    $('<div>').css({
+      position: 'absolute',
+      top: '8px',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      width: '40px',
+      height: '4px',
+      borderRadius: '2px',
+      backgroundColor: 'rgba(255,255,255,0.25)',
+      pointerEvents: 'none',
+    }).appendTo($header);
+  }
 
   function updateHeaderStyle(theme: string, forumName: string) {
     if (theme === 'custom') {
@@ -148,42 +167,75 @@ function openForum() {
   if ($backdrop) $backdrop.appendTo('body');
   $overlay.appendTo('body');
 
-  let dragStartX = 0, dragStartY = 0, initialLeft = 0, initialTop = 0;
+  // 手机端交互：点击头部关闭 + 下滑手势关闭
+  if (isMobile) {
+    let swipeStartY = 0;
+    let swipeStartX = 0;
+    let swipeStartTime = 0;
 
-  $container.on('mousedown.zsdforum touchstart.zsdforum', '.zsd-forum-drag-handle', function(e) {
-    $container.data('isDragging', false);
-    const evt = e.type.indexOf('touch') !== -1 ? (e as any).originalEvent.touches[0] : e;
-    dragStartX = evt.clientX;
-    dragStartY = evt.clientY;
-    const rect = ($container[0] as HTMLElement).getBoundingClientRect();
-    initialLeft = rect.left;
-    initialTop = rect.top;
-    $overlay.show();
-    if (e.type === 'mousedown') e.preventDefault();
-  });
+    $header.on('touchstart.zsdforum', function(e) {
+      const touch = (e as any).originalEvent.touches[0];
+      swipeStartY = touch.clientY;
+      swipeStartX = touch.clientX;
+      swipeStartTime = Date.now();
+    });
 
-  $overlay.on('mousemove.zsdforum touchmove.zsdforum', function(e) {
-    const moveEvt = e.type.indexOf('touch') !== -1 ? (e as any).originalEvent.touches[0] : e;
-    const deltaX = moveEvt.clientX - dragStartX;
-    const deltaY = moveEvt.clientY - dragStartY;
-    if (Math.abs(deltaX) > 2 || Math.abs(deltaY) > 2) {
-      $container.data('isDragging', true);
-      $container.css({
-        left: (initialLeft + deltaX) + 'px',
-        top: (initialTop + deltaY) + 'px',
-        right: 'auto',
-        bottom: 'auto',
-      });
-    }
-    if (e.type === 'touchmove') e.preventDefault();
-  });
+    $header.on('touchend.zsdforum', function(e) {
+      const touch = (e as any).originalEvent.changedTouches[0];
+      const deltaY = touch.clientY - swipeStartY;
+      const deltaX = touch.clientX - swipeStartX;
+      const duration = Date.now() - swipeStartTime;
 
-  $overlay.on('mouseup.zsdforum touchend.zsdforum', function() {
-    $overlay.hide();
-    if ($container.data('isDragging')) {
-      setTimeout(function() { $container.data('isDragging', false); }, 50);
-    }
-  });
+      // 向下滑动超过 60px 且水平偏移不大，视为关闭手势
+      if (deltaY > 60 && Math.abs(deltaX) < 80 && duration < 400) {
+        closeForum();
+        return;
+      }
+
+      // 轻触（无显著滑动）也关闭
+      if (Math.abs(deltaY) < 10 && Math.abs(deltaX) < 10 && duration < 300) {
+        closeForum();
+      }
+    });
+  } else {
+    // 桌面端：拖拽逻辑
+    let dragStartX = 0, dragStartY = 0, initialLeft = 0, initialTop = 0;
+
+    $container.on('mousedown.zsdforum touchstart.zsdforum', '.zsd-forum-drag-handle', function(e) {
+      $container.data('isDragging', false);
+      const evt = e.type.indexOf('touch') !== -1 ? (e as any).originalEvent.touches[0] : e;
+      dragStartX = evt.clientX;
+      dragStartY = evt.clientY;
+      const rect = ($container[0] as HTMLElement).getBoundingClientRect();
+      initialLeft = rect.left;
+      initialTop = rect.top;
+      $overlay.show();
+      if (e.type === 'mousedown') e.preventDefault();
+    });
+
+    $overlay.on('mousemove.zsdforum touchmove.zsdforum', function(e) {
+      const moveEvt = e.type.indexOf('touch') !== -1 ? (e as any).originalEvent.touches[0] : e;
+      const deltaX = moveEvt.clientX - dragStartX;
+      const deltaY = moveEvt.clientY - dragStartY;
+      if (Math.abs(deltaX) > 2 || Math.abs(deltaY) > 2) {
+        $container.data('isDragging', true);
+        $container.css({
+          left: (initialLeft + deltaX) + 'px',
+          top: (initialTop + deltaY) + 'px',
+          right: 'auto',
+          bottom: 'auto',
+        });
+      }
+      if (e.type === 'touchmove') e.preventDefault();
+    });
+
+    $overlay.on('mouseup.zsdforum touchend.zsdforum', function() {
+      $overlay.hide();
+      if ($container.data('isDragging')) {
+        setTimeout(function() { $container.data('isDragging', false); }, 50);
+      }
+    });
+  }
 
   // 手动构建 iframe DOM，完全避免 doc.write() 的副作用
   const iframeEl = $iframe[0] as HTMLIFrameElement;
@@ -216,6 +268,7 @@ function openForum() {
     const windowControls = reactive({ requestClose: false });
     app = createApp(App);
     app.provide('windowControls', windowControls);
+    app.provide('isMobile', isMobile);
     app.config.errorHandler = (err, instance, info) => {
       console.error('[Zsd网游论坛] Vue 渲染错误:', err, info);
       // 在 iframe body 中显示错误提示，避免透明空框
