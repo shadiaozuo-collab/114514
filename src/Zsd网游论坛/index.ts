@@ -1,6 +1,6 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { createApp, reactive, watch } from 'vue';
-import { reloadOnChatChange, createScriptIdIframe, teleportStyle } from '@util/script';
+import { reloadOnChatChange, teleportStyle } from '@util/script';
 import App from './App.vue';
 import { useForumSettingsStore, useForumUiStore } from './settings';
 import { injectForumContext, uninjectForumContext, generatePosts, generatePostsMerged, generatePostsSequential } from './aiGenerator';
@@ -40,25 +40,10 @@ function isMobileDevice() {
 function openForum() {
   const isMobile = isMobileDevice();
 
-  if ($iframe) {
-    const $container = $iframe.parent();
-    $container.show();
-    if (isMobile) {
-      $container.css({
-        top: '0', right: '0', width: '100vw', height: '100vh',
-        zIndex: '100000', border: 'none', borderRadius: '0', boxShadow: 'none',
-      });
-      $container.find('.zsd-forum-drag-handle').css({ cursor: 'default', borderRadius: '0' });
-    } else {
-      $container.css({
-        top: '80px', right: '20px', width: '420px', height: '560px',
-        zIndex: '10000', border: '1px solid #374151', borderRadius: '8px',
-        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
-      });
-      $container.find('.zsd-forum-drag-handle').css({ cursor: 'grab', borderRadius: '8px 8px 0 0' });
-    }
-    return;
-  }
+  // 强制清理：无论之前是否有窗口，都先彻底销毁再重建
+  closeForum();
+  $(`[script_id="${SCRIPT_ID}"]`).remove();
+  $('.zsd-forum-drag-overlay').remove();
 
   const $container = $('<div>').attr('script_id', SCRIPT_ID).css(isMobile ? {
     position: 'fixed',
@@ -118,7 +103,12 @@ function openForum() {
     $header.css({ backgroundColor: colors.bg, color: colors.text }).text(forumName || 'Z论坛');
   }
 
-  $iframe = createScriptIdIframe().css({
+  // 使用 about:blank + doc.write()，彻底绕过 srcdoc 的 race condition
+  $iframe = $('<iframe>').attr({
+    script_id: SCRIPT_ID + '-' + Date.now(),
+    frameborder: 0,
+    src: 'about:blank',
+  }).css({
     width: '100%',
     flex: '1',
     border: 'none',
@@ -177,18 +167,34 @@ function openForum() {
     }
   });
 
-  function initIframe() {
-    if (!$iframe) return;
-    const doc = $iframe[0].contentDocument;
-    if (!doc) {
-      console.warn('[Zsd网游论坛] iframe contentDocument is null');
-      return;
-    }
+  // 同步写入 iframe HTML，然后立即初始化 Vue（不依赖 load 事件）
+  const iframeEl = $iframe[0] as HTMLIFrameElement;
+  const doc = iframeEl.contentDocument;
+  if (doc) {
+    doc.open();
+    doc.write(`<!DOCTYPE html>
+<html>
+<head>
+<link rel="stylesheet" href="https://testingcf.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css">
+<script src="https://testingcf.jsdelivr.net/gh/n0vi028/JS-Slash-Runner/lib/tailwindcss.min.js"></script>
+<script src="https://testingcf.jsdelivr.net/npm/jquery"></script>
+<script src="https://testingcf.jsdelivr.net/npm/jquery-ui/dist/jquery-ui.min.js"></script>
+<link rel="stylesheet" href="https://testingcf.jsdelivr.net/npm/jquery-ui/themes/base/theme.min.css" />
+<script src="https://testingcf.jsdelivr.net/npm/jquery-ui-touch-punch"></script>
+<script src="https://testingcf.jsdelivr.net/npm/lodash"></script>
+<script src="https://testingcf.jsdelivr.net/gh/n0vi028/JS-Slash-Runner/src/iframe/adjust_iframe_height.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;}
+html,body{margin:0!important;padding:0;overflow:hidden!important;max-width:100%!important;}
+</style>
+</head>
+<body></body>
+</html>`);
+    doc.close();
 
+    // 确保 body 已就绪
     const style = doc.createElement('style');
-    style.textContent = `
-      html, body { height: 100% !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important; background-color: transparent !important; }
-    `;
+    style.textContent = 'html, body { height: 100% !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important; background-color: transparent !important; }';
     doc.head.appendChild(style);
 
     styleTeleport = teleportStyle(doc.head);
@@ -214,16 +220,9 @@ function openForum() {
     injectForumContext();
     setupAutoInject();
     setupAutoGenerate();
+  } else {
+    console.error('[Zsd网游论坛] iframe contentDocument 为 null，无法初始化');
   }
-
-  $iframe.on('load', initIframe);
-
-  // 防御 race condition：如果 iframe 已经加载完成（缓存/快速加载），直接初始化
-  requestAnimationFrame(() => {
-    if ($iframe && $iframe[0].contentDocument?.readyState === 'complete') {
-      initIframe();
-    }
-  });
 }
 
 function closeForum() {
