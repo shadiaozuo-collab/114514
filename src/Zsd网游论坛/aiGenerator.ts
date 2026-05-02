@@ -69,6 +69,10 @@ function makePostItemSchema(commentCount: number) {
           required: ['authorId', 'content', 'timestamp'],
         },
       },
+      metadata: {
+        type: 'object',
+        description: '额外的元数据，如赛事比分(teamA,teamB,score,winner,round)、报纸期号(issueNumber)和文章列表(articles)等',
+      },
     },
     required: ['title', 'content', 'authorId', 'timestamp', 'comments'],
   };
@@ -294,6 +298,7 @@ export async function generatePosts(sectionId: string, topic?: string) {
   } else {
     userInput = `请为论坛"${sectionName}"板块批量生成${postCount}个左右的帖子，每个帖子附带${commentCount}条左右的评论。${topicHint}\n以JSON格式返回，包含posts数组，每个帖子有title、content、authorId、timestamp（故事内时间）、comments数组。`;
   }
+  const schema = postBatchSchema(postCount, commentCount);
   const result = settings.ZincludePresetContext
     ? await generate({
         user_input: userInput,
@@ -301,6 +306,7 @@ export async function generatePosts(sectionId: string, topic?: string) {
         custom_api: hasCustomApi ? customApi : undefined,
         max_chat_history: settings.ZinjectChatHistoryCount,
         injects: [{ role: 'system', content: systemPrompt, position: 'in_chat', depth: 0, should_scan: true }],
+        json_schema: schema,
       })
     : await generateRaw({
         user_input: userInput,
@@ -314,6 +320,7 @@ export async function generatePosts(sectionId: string, topic?: string) {
           { role: 'system', content: systemPrompt },
           'user_input',
         ],
+        json_schema: schema,
       });
 
   const parsed = safeJsonParse(result as string);
@@ -367,6 +374,7 @@ export async function generatePostsMerged(sectionIds: string[], topic?: string) 
   const customApi = buildCustomApi(settings);
   const hasCustomApi = Object.keys(customApi).length > 0;
 
+  const schema = mergedSectionsBatchSchema(sectionIds, postCount, commentCount);
   const result = settings.ZincludePresetContext
     ? await generate({
         user_input: userInput,
@@ -374,6 +382,7 @@ export async function generatePostsMerged(sectionIds: string[], topic?: string) 
         custom_api: hasCustomApi ? customApi : undefined,
         max_chat_history: settings.ZinjectChatHistoryCount,
         injects: [{ role: 'system', content: combinedSystemPrompt, position: 'in_chat', depth: 0, should_scan: true }],
+        json_schema: schema,
       })
     : await generateRaw({
         user_input: userInput,
@@ -387,6 +396,7 @@ export async function generatePostsMerged(sectionIds: string[], topic?: string) 
           { role: 'system', content: combinedSystemPrompt },
           'user_input',
         ],
+        json_schema: schema,
       });
 
   const parsed = safeJsonParse(result as string);
@@ -427,6 +437,7 @@ export async function generateComments(sectionId: string, post: ForumPost) {
   const hasCustomApi = Object.keys(customApi).length > 0;
 
   const userInput = `帖子标题：${post.title}\n帖子内容：${post.content}\n作者：${post.authorId}\n帖子时间：${post.timestamp}\n${existingComments ? `已有评论：\n${existingComments}\n` : ''}请为这个帖子生成${commentCount}条左右的评论，以JSON格式返回。包含comments数组，每条有authorId、content和timestamp（故事内时间）。`;
+  const schema = commentSchema(commentCount);
   const result = settings.ZincludePresetContext
     ? await generate({
         user_input: userInput,
@@ -434,6 +445,7 @@ export async function generateComments(sectionId: string, post: ForumPost) {
         custom_api: hasCustomApi ? customApi : undefined,
         max_chat_history: settings.ZinjectChatHistoryCount,
         injects: [{ role: 'system', content: systemPrompt, position: 'in_chat', depth: 0, should_scan: true }],
+        json_schema: schema,
       })
     : await generateRaw({
         user_input: userInput,
@@ -447,6 +459,7 @@ export async function generateComments(sectionId: string, post: ForumPost) {
           { role: 'system', content: systemPrompt },
           'user_input',
         ],
+        json_schema: schema,
       });
 
   const parsed = safeJsonParse(result as string);
