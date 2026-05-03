@@ -1,10 +1,10 @@
 <template>
   <div class="flex items-center border-b border-[var(--f-border)]">
-    <div class="flex-1 flex overflow-x-auto scrollbar-hide">
+    <div class="flex-1 flex overflow-x-auto scrollbar-hide min-w-0">
       <button
         v-for="tab in tabs"
         :key="tab.key"
-        class="flex-shrink-0 py-2 px-3 text-xs font-semibold transition-colors"
+        class="flex-shrink-0 py-2 px-3 text-xs font-semibold transition-colors whitespace-nowrap"
         :class="activeSection === tab.key ? 'text-[var(--f-accent)] border-b-2 border-[var(--f-accent)]' : 'text-[var(--f-text-secondary)] hover:text-[var(--f-text)]'"
         :style="{ backgroundColor: activeSection === tab.key ? 'var(--f-bg-card)' : 'var(--f-bg)' }"
         @click="$emit('switch', tab.key)"
@@ -88,6 +88,7 @@ function typeBadgeStyle(type: string) {
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
