@@ -4,7 +4,7 @@ const path = require('path');
 const vendorDir = path.join('src', 'Zsd网游论坛', 'vendor');
 const files = {
   TAILWIND_JS: 'tailwindcss.min.js',
-  FONTAWESOME_CSS: 'fontawesome.min.css',
+  FONTAWESOME_CSS: 'fontawesome-inline.min.css',
   JQUERY_JS: 'jquery.min.js',
   ADJUST_IFRAME_JS: 'adjust_iframe_height.js',
 };
