@@ -185,8 +185,9 @@ function openForum() {
   const $container = $('<div>').attr('script_id', SCRIPT_ID).css(isMobile ? {
     position: 'fixed',
     top: '10vh',
-    left: '50%',
-    transform: 'translateX(-50%)',
+    left: '0',
+    right: '0',
+    margin: '0 auto',
     width: '92vw',
     maxWidth: '480px',
     height: '85vh',
