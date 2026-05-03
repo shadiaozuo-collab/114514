@@ -1,6 +1,7 @@
 <template>
   <div class="flex items-center border-b border-[var(--f-border)]">
-    <div class="flex-1 flex overflow-x-auto scrollbar-hide min-w-0">
+    <!-- PC/桌面端：标签按钮 -->
+    <div v-if="!isMobile" class="flex-1 flex overflow-x-auto scrollbar-hide min-w-0">
       <button
         v-for="tab in tabs"
         :key="tab.key"
@@ -14,6 +15,24 @@
           {{ tab.type === 'tournament' ? '赛' : '报' }}
         </span>
       </button>
+    </div>
+    <!-- 手机/触摸端：下拉菜单 -->
+    <div v-else class="flex-1 flex items-center min-w-0 px-1">
+      <select
+        :value="activeSection"
+        class="w-full text-xs px-2 py-1.5 rounded outline-none border"
+        :style="{ backgroundColor: 'var(--f-bg-input)', color: 'var(--f-text)', borderColor: 'var(--f-border-hover)' }"
+        @change="onSelectChange"
+      >
+        <option
+          v-for="tab in tabs"
+          :key="tab.key"
+          :value="tab.key"
+          :selected="tab.key === activeSection"
+        >
+          {{ tab.name }}{{ tab.type !== 'forum' ? (tab.type === 'tournament' ? ' [赛]' : ' [报]') : '' }}
+        </option>
+      </select>
     </div>
     <div class="flex items-center px-1 gap-0.5 border-l border-[var(--f-border)] flex-shrink-0">
       <button
@@ -60,9 +79,16 @@ import { computed } from 'vue';
 import { useForumSettingsStore } from './settings';
 
 defineProps<{ activeSection: string }>();
-defineEmits<{ switch: [sectionId: string]; toggleSettings: []; close: []; refresh: []; showGenLog: []; testAddPosts: [] }>();
+const emit = defineEmits<{ switch: [sectionId: string]; toggleSettings: []; close: []; refresh: []; showGenLog: []; testAddPosts: [] }>();
 
 const isMobile = ('ontouchstart' in window || navigator.maxTouchPoints > 0) && window.innerWidth <= 768;
+
+function onSelectChange(e: Event) {
+  const target = e.target as HTMLSelectElement;
+  if (target.value) {
+    emit('switch', target.value);
+  }
+}
 
 const settingsStore = useForumSettingsStore();
 const tabs = computed(() =>

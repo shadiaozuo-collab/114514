@@ -293,13 +293,29 @@
       </button>
     </div>
 
-    <SettingsPanel v-if="showSettings" @close="showSettings = false" />
+    <!-- 设置面板（可调整大小） -->
+    <div v-if="showSettings" class="absolute inset-0 z-30 flex items-center justify-center p-2" @click.self="showSettings = false">
+      <div
+        ref="settingsWrapper"
+        class="relative w-full h-full min-w-[240px] min-h-[200px] rounded border overflow-hidden"
+        :style="{ borderColor: 'var(--f-border)', backgroundColor: 'var(--f-bg)' }"
+      >
+        <SettingsPanel @close="showSettings = false" />
+        <!-- 自定义 resize handle -->
+        <div
+          class="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize z-20"
+          style="background: linear-gradient(135deg, transparent 50%, var(--f-text-muted) 50%); opacity: 0.6;"
+          @mousedown="startResize"
+          @touchstart="startResize"
+        ></div>
+      </div>
+    </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, inject, computed, watch } from 'vue';
+import { ref, inject, computed, watch, onMounted, onUnmounted } from 'vue';
 import type { ForumPost, ForumComment } from './types';
 import { useForumSettingsStore, useForumUiStore } from './settings';
 import { generatePosts, generatePostsMerged, generatePostsSequential, generateComments, injectForumContext, cleanupOrphanPosts } from './aiGenerator';
@@ -317,6 +333,52 @@ const settingsStore = useForumSettingsStore();
 const forumStore = useForumUiStore();
 
 const showSettings = ref(false);
+
+// ── 设置面板 resize ──
+const settingsWrapper = ref<HTMLDivElement | null>(null);
+let resizing = false;
+let resizeStartX = 0, resizeStartY = 0, resizeStartW = 0, resizeStartH = 0;
+
+function startResize(e: MouseEvent | TouchEvent) {
+  if (!settingsWrapper.value) return;
+  resizing = true;
+  const evt = 'touches' in e ? e.touches[0] : e;
+  resizeStartX = evt.clientX;
+  resizeStartY = evt.clientY;
+  const rect = settingsWrapper.value.getBoundingClientRect();
+  resizeStartW = rect.width;
+  resizeStartH = rect.height;
+  if (e.type === 'touchstart') e.preventDefault();
+}
+
+function onResizeMove(e: MouseEvent | TouchEvent) {
+  if (!resizing || !settingsWrapper.value) return;
+  const evt = 'touches' in e ? e.touches[0] : e;
+  const deltaX = evt.clientX - resizeStartX;
+  const deltaY = evt.clientY - resizeStartY;
+  settingsWrapper.value.style.width = Math.max(240, resizeStartW + deltaX) + 'px';
+  settingsWrapper.value.style.height = Math.max(200, resizeStartH + deltaY) + 'px';
+  if (e.type === 'touchmove') e.preventDefault();
+}
+
+function onResizeEnd() {
+  resizing = false;
+}
+
+onMounted(() => {
+  window.addEventListener('mousemove', onResizeMove);
+  window.addEventListener('mouseup', onResizeEnd);
+  window.addEventListener('touchmove', onResizeMove, { passive: false });
+  window.addEventListener('touchend', onResizeEnd);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('mousemove', onResizeMove);
+  window.removeEventListener('mouseup', onResizeEnd);
+  window.removeEventListener('touchmove', onResizeMove);
+  window.removeEventListener('touchend', onResizeEnd);
+});
+
 const genTopic = ref('');
 const genMode = ref<'single' | 'merged' | 'sequential'>('single');
 const selectedSections = ref<string[]>([forumStore.activeSection]);
