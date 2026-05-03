@@ -31,6 +31,13 @@
         <i class="fa-solid fa-clipboard-list text-[10px]"></i>
       </button>
       <button
+        class="flex items-center justify-center w-6 h-6 rounded transition-colors text-[var(--f-text-muted)] hover:text-[var(--f-danger)] hover:bg-[var(--f-danger-bg)] bg-[var(--f-bg-input)]"
+        title="测试：模拟添加3个帖子"
+        @click="$emit('testAddPosts')"
+      >
+        <i class="fa-solid fa-vial text-[10px]"></i>
+      </button>
+      <button
         class="flex items-center justify-center w-6 h-6 rounded transition-colors text-[var(--f-text-muted)] hover:text-[var(--f-text)] hover:bg-[var(--f-bg-hover)] bg-[var(--f-bg-input)]"
         title="设置"
         @click="$emit('toggleSettings')"
@@ -53,7 +60,7 @@ import { computed } from 'vue';
 import { useForumSettingsStore } from './settings';
 
 defineProps<{ activeSection: string }>();
-defineEmits<{ switch: [sectionId: string]; toggleSettings: []; close: []; refresh: []; showGenLog: [] }>();
+defineEmits<{ switch: [sectionId: string]; toggleSettings: []; close: []; refresh: []; showGenLog: []; testAddPosts: [] }>();
 
 const isMobile = ('ontouchstart' in window || navigator.maxTouchPoints > 0) && window.innerWidth <= 768;
 

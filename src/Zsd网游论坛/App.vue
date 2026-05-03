@@ -50,6 +50,7 @@
       @refresh="handleRefresh"
       @close="requestClose"
       @show-gen-log="forumStore.openGenLog()"
+      @test-add-posts="handleTestAddPosts"
     />
 
     <!-- 论坛板块 -->
@@ -391,6 +392,68 @@ function handleRefresh() {
     toastr.success('[论坛] 数据已刷新');
   } catch (e: any) {
     toastr.error(`[论坛] 刷新失败: ${e?.message}`);
+  }
+}
+
+function handleTestAddPosts() {
+  try {
+    const store = useForumSettingsStore();
+    const sectionId = forumStore.activeSection;
+    const now = Date.now();
+
+    const testPosts = [
+      {
+        id: 'test-' + now + '-1',
+        section: sectionId,
+        title: '【测试帖子1】这是模拟生成的测试数据',
+        content: '这是一条用于测试的模拟帖子内容。如果你能看到这条帖子，说明 addPost 和 Vue 响应式是正常的。问题可能出在 AI 生成流程中。',
+        authorId: '测试用户A',
+        timestamp: String(now),
+        comments: [
+          { id: 'tc1', authorId: '路人甲', content: '测试评论1：能看到帖子了！', timestamp: String(now), isAiGenerated: false },
+          { id: 'tc2', authorId: '路人乙', content: '测试评论2：Vue 响应式工作正常。', timestamp: String(now), isAiGenerated: false },
+        ],
+        isAiGenerated: false,
+        likes: 42,
+      },
+      {
+        id: 'test-' + now + '-2',
+        section: sectionId,
+        title: '【测试帖子2】第二篇测试数据',
+        content: '这是第二条测试帖子。如果第一条和这条都能看到，说明 unshift 和数组响应式都正常。',
+        authorId: '测试用户B',
+        timestamp: String(now),
+        comments: [],
+        isAiGenerated: false,
+        likes: 7,
+      },
+      {
+        id: 'test-' + now + '-3',
+        section: sectionId,
+        title: '【测试帖子3】数据持久化测试',
+        content: '这是第三条测试帖子。点击"刷新"按钮后如果帖子还在，说明 Zposts 变量保存正常。如果消失，说明变量同步有问题。',
+        authorId: '测试用户C',
+        timestamp: String(now),
+        comments: [
+          { id: 'tc3', authorId: '管理员', content: '测试评论3：刷新后我应该还在。', timestamp: String(now), isAiGenerated: false },
+        ],
+        isAiGenerated: false,
+        likes: 128,
+      },
+    ];
+
+    for (const post of testPosts) {
+      store.addPost(post as any);
+    }
+
+    // 检查当前板块帖子数
+    const currentCount = store.settings.Zposts[sectionId]?.length || 0;
+    toastr.success(`[测试] 已添加 3 条模拟帖子，当前板块共 ${currentCount} 条`);
+    console.log('[Zsd测试] addPost 完成，当前板块帖子数:', currentCount);
+    console.log('[Zsd测试] 当前板块帖子:', store.settings.Zposts[sectionId]);
+  } catch (e: any) {
+    console.error('[Zsd测试] 添加测试帖子失败:', e);
+    toastr.error(`[测试] 失败: ${e?.message || e}`);
   }
 }
 
