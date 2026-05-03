@@ -340,9 +340,13 @@ function openForum() {
   }
 
   if (doc) {
-    // 延迟到下一帧执行 heavy 初始化，避免点击论坛按钮时主线程卡顿
-    requestAnimationFrame(() => {
-      diagLog(diag, 'requestAnimationFrame 执行');
+    // 某些手机浏览器（如 Chrome Android）在 about:blank iframe 中
+    // requestAnimationFrame 可能永远不触发，用 setTimeout 兜底
+    let initFired = false;
+    function doInit() {
+      if (initFired) return;
+      initFired = true;
+      diagLog(diag, '开始执行初始化');
       // ========== 本地版：内联注入资源，彻底摆脱 CDN 依赖 ==========
       // 1. Tailwind CSS 运行时编译器
       const twScript = doc.createElement('script');
@@ -538,7 +542,15 @@ function openForum() {
           });
         }
       }
-    });
+    }
+    // rAF + setTimeout 双重保险：某些手机浏览器 rAF 不触发
+    requestAnimationFrame(doInit);
+    setTimeout(() => {
+      if (!initFired) {
+        diagLog(diag, '⚠️ requestAnimationFrame 未触发，使用 setTimeout 兜底');
+        doInit();
+      }
+    }, 500);
   } else {
     diagLog(null, '❌ iframe contentDocument 为 NULL，无法初始化');
     console.error('[Zsd网游论坛] iframe contentDocument 为 null，无法初始化');
