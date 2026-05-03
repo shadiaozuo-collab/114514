@@ -46,16 +46,19 @@ const SectionConfigSchema = z.object({
   type: z.enum(['forum', 'tournament', 'newspaper']).default('forum'),
 });
 
-const defaultOutputFormat = `你必须严格按照以下XML标签结构输出，不要添加、删除或重命名标签。
+const defaultOutputFormat = `<format_critical>
+【格式强制约束 - 违反将导致输出无效】
+你必须且只能输出XML标签，禁止输出任何其他格式的文本（禁止Markdown、禁止自由散文、禁止角色扮演描述、禁止对话体、禁止解释性文字）。
+</format_critical>
 
 <format>
-批量生成帖子时输出结构：
+批量生成帖子时，输出结构必须是：
 <post>
   <title>帖子标题</title>
   <content>帖子正文，50-150字，有具体细节</content>
   <authorId>发帖人ID</authorId>
   <timestamp>故事内时间，如 第三章·深夜</timestamp>
-  <likes>点赞数，0-999之间的整数，热帖高水帖低</likes>
+  <likes>点赞数，0-999之间的整数</likes>
   <comments>
     <comment>
       <authorId>评论人ID</authorId>
@@ -65,7 +68,7 @@ const defaultOutputFormat = `你必须严格按照以下XML标签结构输出，
   </comments>
 </post>
 
-生成评论时输出结构：
+生成评论时，输出结构必须是：
 <comment>
   <authorId>评论人ID</authorId>
   <content>评论内容</content>
@@ -73,13 +76,40 @@ const defaultOutputFormat = `你必须严格按照以下XML标签结构输出，
 </comment>
 </format>
 
+<example>
+正确输出示例（必须严格模仿此格式）：
+<post>
+  <title>【吐槽】新手村的路牌指向有问题</title>
+  <content>昨天刚出新手村，跟着路牌往东走，结果一头扎进野狼窝。路牌写的"东郊农场"，实际位置在西北方向，害我掉了半管血。</content>
+  <authorId>迷路的小法师</authorId>
+  <timestamp>铁匠铺开业第3天·午后</timestamp>
+  <likes>23</likes>
+  <comments>
+    <comment>
+      <authorId>老猎人</authorId>
+      <content>路牌确实有问题，建议跟NPC买张地图，10铜币不贵。</content>
+      <timestamp>铁匠铺开业第3天·午后</timestamp>
+    </comment>
+    <comment>
+      <authorId>杠精本精</authorId>
+      <content>自己不会看小地图怪路牌？路牌明明是对的，是你方向感差。</content>
+      <timestamp>铁匠铺开业第3天·傍晚</timestamp>
+    </comment>
+  </comments>
+</post>
+</example>
+
 <rule>
-格式规则：
-- 每个帖子用 <post>...</post> 包裹，每个评论用 <comment>...</comment> 包裹
-- 内容可包含多行和特殊字符，但不要出现未闭合的标签
-- timestamp 必须填故事内时间，不要用现实时间或留空
-- likes 是模拟点赞数/热度，根据帖子质量分配 0-999 的整数
-- 严格按上述XML结构输出，不要输出其他任何文本
+格式规则（违反任一条输出作废）：
+1. 【唯一格式】输出必须且只能是XML标签，首字符必须是"<"，最后一个字符必须是">"
+2. 【禁止杂物】禁止输出XML以外的任何内容：禁止 Markdown代码块、禁止解释、禁止道歉、禁止"好的"/"明白"/"以下是"等前缀
+3. 【标签闭合】每个<tag>必须有对应的</tag>，禁止未闭合标签
+4. 【内容转义】如果正文包含<或>或&字符，必须转义为&lt; &gt; &amp;
+5. 【时间格式】timestamp必须填故事内时间（如"第三章·深夜"），禁止留空或写现实日期
+6. 【点赞规则】likes必须是0-999之间的纯数字整数，禁止写文字描述
+7. 【评论立场】同一帖子的评论中必须同时存在支持、反对、质疑、调侃等不同立场
+8. 【主题唯一】同一批次的多个帖子主题必须完全不同，禁止同质化
+9. 【零废话】不要输出<post>之外的任何文字，包括格式说明、角色扮演、场景描述
 </rule>
 
 <anti_repetition>
