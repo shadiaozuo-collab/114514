@@ -13,6 +13,73 @@ const themeColors: Record<string, { bg: string; text: string }> = {
   'light': { bg: '#f3f4f6', text: '#2563eb' },
 };
 
+// Tailwind CSS 关键类名 fallback：当 CDN 加载失败时确保论坛基本布局可用
+const FALLBACK_CSS = `
+.forum-window{display:flex;flex-direction:column;height:100%;overflow:hidden;position:relative;}
+.relative{position:relative;}.absolute{position:absolute;top:0;right:0;bottom:0;left:0;}
+.inset-0{top:0;right:0;bottom:0;left:0;}
+.flex{display:flex;}.flex-col{flex-direction:column;}
+.items-center{align-items:center;}.justify-between{justify-content:space-between;}
+.justify-center{justify-content:center;}.shrink-0{flex-shrink:0;}.flex-1{flex:1 1 0%;}
+.h-full{height:100%;}.w-full{width:100%;}.min-w-0{min-width:0;}
+.overflow-hidden{overflow:hidden;}.overflow-y-auto{overflow-y:auto;}.overflow-x-auto{overflow-x:auto;}
+.z-0{z-index:0;}.z-\\[1\\]{z-index:1;}.z-\\[2\\]{z-index:2;}.z-20{z-index:20;}
+.p-2{padding:0.5rem;}.p-3{padding:0.75rem;}
+.px-1{padding-left:0.25rem;padding-right:0.25rem;}
+.px-2{padding-left:0.5rem;padding-right:0.5rem;}
+.px-3{padding-left:0.75rem;padding-right:0.75rem;}
+.py-1{padding-top:0.25rem;padding-bottom:0.25rem;}
+.py-1\\.5{padding-top:0.375rem;padding-bottom:0.375rem;}
+.py-2{padding-top:0.5rem;padding-bottom:0.5rem;}
+.gap-0\\.5{gap:0.125rem;}.gap-1{gap:0.25rem;}
+.gap-1\\.5{gap:0.375rem;}.gap-2{gap:0.5rem;}.gap-3{gap:0.75rem;}
+.space-y-2>*+*{margin-top:0.5rem;}.space-y-3>*+*{margin-top:0.75rem;}
+.mb-0\\.5{margin-bottom:0.125rem;}.mb-1{margin-bottom:0.25rem;}
+.mb-2{margin-bottom:0.5rem;}.mb-3{margin-bottom:0.75rem;}
+.mt-0\\.5{margin-top:0.125rem;}.mt-1{margin-top:0.25rem;}.mt-2{margin-top:0.5rem;}
+.ml-1{margin-left:0.25rem;}.ml-1\\.5{margin-left:0.375rem;}
+.mr-1{margin-right:0.25rem;}.mr-1\\.5{margin-right:0.375rem;}
+.rounded{border-radius:0.25rem;}.rounded-md{border-radius:0.375rem;}
+.border{border-width:1px;border-style:solid;}
+.border-b{border-bottom-width:1px;border-bottom-style:solid;}
+.border-b-2{border-bottom-width:2px;border-bottom-style:solid;}
+.border-l{border-left-width:1px;border-left-style:solid;}
+.border-t{border-top-width:1px;border-top-style:solid;}
+.text-center{text-align:center;}.text-left{text-align:left;}
+.text-xs{font-size:0.75rem;line-height:1rem;}
+.text-sm{font-size:0.875rem;line-height:1.25rem;}
+.text-lg{font-size:1.125rem;line-height:1.75rem;}
+.text-\\[8px\\]{font-size:8px;}.text-\\[10px\\]{font-size:10px;}.text-\\[11px\\]{font-size:11px;}
+.font-bold{font-weight:700;}.font-semibold{font-weight:600;}.font-medium{font-weight:500;}
+.block{display:block;}.inline-block{display:inline-block;}.hidden{display:none;}
+.cursor-pointer{cursor:pointer;}.cursor-grab{cursor:grab;}
+.cursor-default{cursor:default;}.cursor-wait{cursor:wait;}
+.whitespace-pre-wrap{white-space:pre-wrap;}.break-all{word-break:break-all;}
+.truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.outline-none{outline:2px solid transparent;outline-offset:2px;}
+.resize-none{resize:none;}
+.transition-colors{transition-property:color,background-color,border-color;transition-timing-function:cubic-bezier(0.4,0,0.2,1);transition-duration:150ms;}
+.disabled\\:opacity-50:disabled{opacity:0.5;}
+.text-\\[var\\(--f-text\\)\\]{color:#e5e7eb!important;}
+.text-\\[var\\(--f-text-secondary\\)\\]{color:#9ca3af!important;}
+.text-\\[var\\(--f-text-muted\\)\\]{color:#6b7280!important;}
+.text-\\[var\\(--f-accent\\)\\]{color:#60a5fa!important;}
+.text-\\[var\\(--f-danger\\)\\]{color:#f87171!important;}
+.text-\\[var\\(--f-author\\)\\]{color:#4ade80!important;}
+.bg-\\[var\\(--f-bg\\)\\]{background-color:#111827!important;}
+.bg-\\[var\\(--f-bg-card\\)\\]{background-color:#1f2937!important;}
+.bg-\\[var\\(--f-bg-input\\)\\]{background-color:#374151!important;}
+.bg-\\[var\\(--f-bg-hover\\)\\]{background-color:#4b5563!important;}
+.bg-\\[var\\(--f-accent-bg\\)\\]{background-color:#2563eb!important;}
+.bg-\\[var\\(--f-danger-bg\\)\\]{background-color:#7f1d1d!important;}
+.border-\\[var\\(--f-border\\)\\]{border-color:#374151!important;}
+.border-\\[var\\(--f-border-hover\\)\\]{border-color:#4b5563!important;}
+.hover\\:text-\\[var\\(--f-text\\)\\]:hover{color:#e5e7eb!important;}
+.hover\\:text-\\[var\\(--f-accent\\)\\]:hover{color:#60a5fa!important;}
+.hover\\:bg-\\[var\\(--f-bg-hover\\)\\]:hover{background-color:#4b5563!important;}
+.hover\\:border-\\[var\\(--f-text\\)\\]:hover{border-color:#e5e7eb!important;}
+`;
+
 reloadOnChatChange();
 
 const SCRIPT_ID = 'zsd-forum';
@@ -209,137 +276,168 @@ function openForum() {
   const iframeEl = $iframe[0] as HTMLIFrameElement;
   const doc = iframeEl.contentDocument;
   if (doc) {
-    // 添加外部资源
-    const resources = [
-      { tag: 'link', attrs: { rel: 'stylesheet', href: 'https://testingcf.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css' } },
-      { tag: 'script', attrs: { src: 'https://testingcf.jsdelivr.net/gh/n0vi028/JS-Slash-Runner/lib/tailwindcss.min.js' } },
-      { tag: 'script', attrs: { src: 'https://testingcf.jsdelivr.net/npm/jquery' } },
-      { tag: 'script', attrs: { src: 'https://testingcf.jsdelivr.net/npm/jquery-ui/dist/jquery-ui.min.js' } },
-      { tag: 'link', attrs: { rel: 'stylesheet', href: 'https://testingcf.jsdelivr.net/npm/jquery-ui/themes/base/theme.min.css' } },
-      { tag: 'script', attrs: { src: 'https://testingcf.jsdelivr.net/npm/jquery-ui-touch-punch' } },
-      { tag: 'script', attrs: { src: 'https://testingcf.jsdelivr.net/npm/lodash' } },
-      { tag: 'script', attrs: { src: 'https://testingcf.jsdelivr.net/gh/n0vi028/JS-Slash-Runner/src/iframe/adjust_iframe_height.js' } },
-    ];
-    for (const r of resources) {
-      const el = doc.createElement(r.tag);
-      for (const [k, v] of Object.entries(r.attrs)) el.setAttribute(k, v);
-      if (el.tagName === 'SCRIPT') (el as HTMLScriptElement).async = false;
-      doc.head.appendChild(el);
-    }
-
-    const style = doc.createElement('style');
-    style.textContent = '*,*::before,*::after{box-sizing:border-box;}html,body{margin:0!important;padding:0;overflow:hidden!important;max-width:100%!important;height:100%!important;background-color:transparent!important;}';
-    doc.head.appendChild(style);
-
-    styleTeleport = teleportStyle(doc.head);
-
-    // 启动容错：如果 Vue 初始化失败，尝试自动修复数据后重试一次
-    let initSuccess = false;
-    function tryInitForum() {
-      try {
-        setActivePinia(createPinia());
-        const windowControls = reactive({ requestClose: false });
-        app = createApp(App);
-        app.provide('windowControls', windowControls);
-        app.config.errorHandler = (err, instance, info) => {
-          console.error('[Zsd网游论坛] Vue 渲染错误:', err, info);
-          // 在 iframe body 中显示错误提示，避免透明空框
-          if (doc && doc.body && doc.body.children.length === 0) {
-            doc.body.innerHTML = `
-              <div style="padding: 20px; color: #ef4444; font-family: sans-serif; text-align: center;">
-                <div style="font-size: 14px; font-weight: bold; margin-bottom: 8px;">⚠️ 论坛加载失败</div>
-                <div style="font-size: 12px; color: #9ca3af;">${(err as Error)?.message || '未知错误'}</div>
-                <div style="font-size: 11px; color: #6b7280; margin-top: 12px;">请尝试刷新页面或切换对话后重试</div>
-              </div>
-            `;
-          }
-        };
-        app.mount(doc.body);
-
-        watch(() => windowControls.requestClose, v => {
-          if (v) {
-            windowControls.requestClose = false;
-            hideForum();
-          }
-        });
-
-        const store = useForumSettingsStore();
-        updateHeaderStyle(store.settings.Ztheme, store.settings.ZforumName);
-        watch(() => store.settings.Ztheme, (theme) => updateHeaderStyle(theme, store.settings.ZforumName));
-        watch(() => store.settings.ZforumName, (name) => updateHeaderStyle(store.settings.Ztheme, name));
-
-        injectForumContext();
-        setupAutoInject();
-        setupAutoGenerate();
-        initSuccess = true;
-        return true;
-      } catch (e: any) {
-        console.error('[Zsd网游论坛] Vue 初始化失败:', e);
-        return false;
+    // 延迟到下一帧执行 heavy 初始化，避免点击论坛按钮时主线程卡顿
+    requestAnimationFrame(() => {
+      // 添加外部资源（CDN）
+      const resources = [
+        { tag: 'link', attrs: { rel: 'stylesheet', href: 'https://testingcf.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css' } },
+        { tag: 'script', attrs: { src: 'https://testingcf.jsdelivr.net/gh/n0vi028/JS-Slash-Runner/lib/tailwindcss.min.js' } },
+        { tag: 'script', attrs: { src: 'https://testingcf.jsdelivr.net/npm/jquery' } },
+        { tag: 'script', attrs: { src: 'https://testingcf.jsdelivr.net/npm/jquery-ui/dist/jquery-ui.min.js' } },
+        { tag: 'link', attrs: { rel: 'stylesheet', href: 'https://testingcf.jsdelivr.net/npm/jquery-ui/themes/base/theme.min.css' } },
+        { tag: 'script', attrs: { src: 'https://testingcf.jsdelivr.net/npm/jquery-ui-touch-punch' } },
+        { tag: 'script', attrs: { src: 'https://testingcf.jsdelivr.net/npm/lodash' } },
+        { tag: 'script', attrs: { src: 'https://testingcf.jsdelivr.net/gh/n0vi028/JS-Slash-Runner/src/iframe/adjust_iframe_height.js' } },
+      ];
+      for (const r of resources) {
+        const el = doc.createElement(r.tag);
+        for (const [k, v] of Object.entries(r.attrs)) el.setAttribute(k, v);
+        if (el.tagName === 'SCRIPT') (el as HTMLScriptElement).async = false;
+        doc.head.appendChild(el);
       }
-    }
 
-    if (!tryInitForum()) {
-      // 第一次初始化失败，尝试修复数据后重试
-      console.warn('[Zsd网游论坛] 首次初始化失败，尝试自动修复数据...');
-      try {
-        const store = useForumSettingsStore();
-        const repaired = store.repairForumData();
-        if (repaired) {
-          // 清理残留后重试
-          if (app) { app.unmount(); app = null; }
-          if (styleTeleport) { styleTeleport.destroy(); styleTeleport = null; }
-          // 清空 iframe body
-          doc.body.innerHTML = '';
-          const retryOk = tryInitForum();
-          if (retryOk) {
-            toastr.success('[论坛] 数据已自动修复，论坛加载成功');
+      // 基础样式 + Tailwind fallback（防止 CDN 加载失败导致空白）
+      const style = doc.createElement('style');
+      style.textContent = '*,*::before,*::after{box-sizing:border-box;}html,body{margin:0!important;padding:0;overflow:hidden!important;max-width:100%!important;height:100%!important;background-color:transparent!important;}' + FALLBACK_CSS;
+      doc.head.appendChild(style);
+
+      styleTeleport = teleportStyle(doc.head);
+
+      // 启动容错：如果 Vue 初始化失败，尝试自动修复数据后重试一次
+      let initSuccess = false;
+      function tryInitForum() {
+        try {
+          setActivePinia(createPinia());
+          const windowControls = reactive({ requestClose: false });
+          app = createApp(App);
+          app.provide('windowControls', windowControls);
+          app.config.errorHandler = (err, instance, info) => {
+            console.error('[Zsd网游论坛] Vue 渲染错误:', err, info);
+            if (doc && doc.body && doc.body.children.length === 0) {
+              doc.body.innerHTML = `
+                <div style="padding: 20px; color: #ef4444; font-family: sans-serif; text-align: center;">
+                  <div style="font-size: 14px; font-weight: bold; margin-bottom: 8px;">⚠️ 论坛加载失败</div>
+                  <div style="font-size: 12px; color: #9ca3af;">${(err as Error)?.message || '未知错误'}</div>
+                  <div style="font-size: 11px; color: #6b7280; margin-top: 12px;">请尝试刷新页面或切换对话后重试</div>
+                </div>
+              `;
+            }
+          };
+          app.mount(doc.body);
+
+          watch(() => windowControls.requestClose, v => {
+            if (v) {
+              windowControls.requestClose = false;
+              hideForum();
+            }
+          });
+
+          const store = useForumSettingsStore();
+          updateHeaderStyle(store.settings.Ztheme, store.settings.ZforumName);
+          watch(() => store.settings.Ztheme, (theme) => updateHeaderStyle(theme, store.settings.ZforumName));
+          watch(() => store.settings.ZforumName, (name) => updateHeaderStyle(store.settings.Ztheme, name));
+
+          injectForumContext();
+          setupAutoInject();
+          setupAutoGenerate();
+          initSuccess = true;
+          return true;
+        } catch (e: any) {
+          console.error('[Zsd网游论坛] Vue 初始化失败:', e);
+          return false;
+        }
+      }
+
+      if (!tryInitForum()) {
+        console.warn('[Zsd网游论坛] 首次初始化失败，尝试自动修复数据...');
+        try {
+          const store = useForumSettingsStore();
+          const repaired = store.repairForumData();
+          if (repaired) {
+            if (app) { app.unmount(); app = null; }
+            if (styleTeleport) { styleTeleport.destroy(); styleTeleport = null; }
+            doc.body.innerHTML = '';
+            const retryOk = tryInitForum();
+            if (retryOk) {
+              toastr.success('[论坛] 数据已自动修复，论坛加载成功');
+            } else {
+              showRepairFallback(doc);
+            }
           } else {
             showRepairFallback(doc);
           }
-        } else {
+        } catch (e) {
           showRepairFallback(doc);
         }
-      } catch (e) {
-        showRepairFallback(doc);
       }
-    }
 
-    function showRepairFallback(doc: Document) {
-      doc.body.innerHTML = `
-        <div style="padding: 24px; color: #e5e7eb; font-family: sans-serif; text-align: center; background: #111827; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;">
-          <div style="font-size: 16px; font-weight: bold; color: #f87171;">⚠️ 论坛数据损坏</div>
-          <div style="font-size: 12px; color: #9ca3af; max-width: 260px;">帖子数据存在损坏，导致论坛无法加载。点击下方按钮可智能修复（保留所有设置和配置）。</div>
-          <button id="zsd-repair-btn" style="padding: 8px 16px; background: #2563eb; color: white; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; margin-top: 8px;">🔧 一键修复数据</button>
-          <button id="zsd-clear-btn" style="padding: 6px 12px; background: transparent; color: #6b7280; border: 1px solid #374151; border-radius: 6px; font-size: 11px; cursor: pointer;">完全清理（会重置配置）</button>
-        </div>
-      `;
-      const repairBtn = doc.getElementById('zsd-repair-btn');
-      const clearBtn = doc.getElementById('zsd-clear-btn');
-      if (repairBtn) {
-        repairBtn.addEventListener('click', () => {
-          try {
-            const store = useForumSettingsStore();
-            store.repairForumData();
-            // 修复后刷新 iframe
-            doc.location.reload();
-          } catch (e: any) {
-            alert('修复失败: ' + (e?.message || e));
+      // CDN 资源加载检测：8 秒后检查 tailwindcss 是否生效
+      setTimeout(() => {
+        if (!initSuccess || !doc || !doc.body) return;
+        const testEl = doc.createElement('div');
+        testEl.className = 'flex h-full';
+        testEl.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;';
+        doc.body.appendChild(testEl);
+        const computed = doc.defaultView?.getComputedStyle(testEl);
+        const isFlex = computed?.display === 'flex';
+        const isFullHeight = computed?.height === '100%';
+        doc.body.removeChild(testEl);
+        if (!isFlex || !isFullHeight) {
+          console.error('[Zsd网游论坛] Tailwind CSS 未加载，检测到网络/CDN 资源加载失败');
+          const overlay = doc.createElement('div');
+          overlay.id = 'zsd-network-error';
+          overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(17,24,39,0.95);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;font-family:sans-serif;text-align:center;color:#e5e7eb;';
+          overlay.innerHTML = `
+            <div style="font-size:18px;font-weight:bold;color:#f87171;">⚠️ 网络连接错误</div>
+            <div style="font-size:13px;color:#9ca3af;max-width:300px;line-height:1.5;">样式资源（Tailwind CSS）加载失败。这可能是因为网络不稳定或无法连接外部 CDN。</div>
+            <div style="font-size:12px;color:#6b7280;">论坛已启用基础样式，但部分视觉效果可能不完整。</div>
+            <button id="zsd-refresh-btn" style="padding:10px 20px;background:#2563eb;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer;margin-top:8px;">🔄 刷新重试</button>
+          `;
+          doc.body.appendChild(overlay);
+          const refreshBtn = doc.getElementById('zsd-refresh-btn');
+          if (refreshBtn) {
+            refreshBtn.addEventListener('click', () => {
+              doc.location.reload();
+            });
           }
-        });
+        }
+      }, 8000);
+
+      function showRepairFallback(doc: Document) {
+        doc.body.innerHTML = `
+          <div style="padding: 24px; color: #e5e7eb; font-family: sans-serif; text-align: center; background: #111827; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;">
+            <div style="font-size: 16px; font-weight: bold; color: #f87171;">⚠️ 论坛数据损坏</div>
+            <div style="font-size: 12px; color: #9ca3af; max-width: 260px;">帖子数据存在损坏，导致论坛无法加载。点击下方按钮可智能修复（保留所有设置和配置）。</div>
+            <button id="zsd-repair-btn" style="padding: 8px 16px; background: #2563eb; color: white; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; margin-top: 8px;">🔧 一键修复数据</button>
+            <button id="zsd-clear-btn" style="padding: 6px 12px; background: transparent; color: #6b7280; border: 1px solid #374151; border-radius: 6px; font-size: 11px; cursor: pointer;">完全清理（会重置配置）</button>
+          </div>
+        `;
+        const repairBtn = doc.getElementById('zsd-repair-btn');
+        const clearBtn = doc.getElementById('zsd-clear-btn');
+        if (repairBtn) {
+          repairBtn.addEventListener('click', () => {
+            try {
+              const store = useForumSettingsStore();
+              store.repairForumData();
+              doc.location.reload();
+            } catch (e: any) {
+              alert('修复失败: ' + (e?.message || e));
+            }
+          });
+        }
+        if (clearBtn) {
+          clearBtn.addEventListener('click', () => {
+            try {
+              const store = useForumSettingsStore();
+              store.clearAllForumVariables();
+              doc.location.reload();
+            } catch (e: any) {
+              alert('清理失败: ' + (e?.message || e));
+            }
+          });
+        }
       }
-      if (clearBtn) {
-        clearBtn.addEventListener('click', () => {
-          try {
-            const store = useForumSettingsStore();
-            store.clearAllForumVariables();
-            doc.location.reload();
-          } catch (e: any) {
-            alert('清理失败: ' + (e?.message || e));
-          }
-        });
-      }
-    }
+    });
   } else {
     console.error('[Zsd网游论坛] iframe contentDocument 为 null，无法初始化');
   }
