@@ -4,6 +4,7 @@ import { reloadOnChatChange, teleportStyle } from '@util/script';
 import App from './App.vue';
 import { useForumSettingsStore, useForumUiStore } from './settings';
 import { injectForumContext, uninjectForumContext, generatePosts, generatePostsMerged, generatePostsSequential, cleanupOrphanPosts } from './aiGenerator';
+import { TAILWIND_JS, FONTAWESOME_CSS, JQUERY_JS, ADJUST_IFRAME_JS } from './vendor';
 
 const themeColors: Record<string, { bg: string; text: string }> = {
   'classic-dark': { bg: '#1f2937', text: '#93c5fd' },
@@ -341,24 +342,30 @@ function openForum() {
     // 延迟到下一帧执行 heavy 初始化，避免点击论坛按钮时主线程卡顿
     requestAnimationFrame(() => {
       diagLog(diag, 'requestAnimationFrame 执行');
-      // 添加外部资源（CDN）
-      const resources = [
-        { tag: 'link', attrs: { rel: 'stylesheet', href: 'https://testingcf.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css' } },
-        { tag: 'script', attrs: { src: 'https://testingcf.jsdelivr.net/gh/n0vi028/JS-Slash-Runner/lib/tailwindcss.min.js' } },
-        { tag: 'script', attrs: { src: 'https://testingcf.jsdelivr.net/npm/jquery' } },
-        { tag: 'script', attrs: { src: 'https://testingcf.jsdelivr.net/npm/jquery-ui/dist/jquery-ui.min.js' } },
-        { tag: 'link', attrs: { rel: 'stylesheet', href: 'https://testingcf.jsdelivr.net/npm/jquery-ui/themes/base/theme.min.css' } },
-        { tag: 'script', attrs: { src: 'https://testingcf.jsdelivr.net/npm/jquery-ui-touch-punch' } },
-        { tag: 'script', attrs: { src: 'https://testingcf.jsdelivr.net/npm/lodash' } },
-        { tag: 'script', attrs: { src: 'https://testingcf.jsdelivr.net/gh/n0vi028/JS-Slash-Runner/src/iframe/adjust_iframe_height.js' } },
-      ];
-      for (const r of resources) {
-        const el = doc.createElement(r.tag);
-        for (const [k, v] of Object.entries(r.attrs)) el.setAttribute(k, v);
-        if (el.tagName === 'SCRIPT') (el as HTMLScriptElement).async = false;
-        doc.head.appendChild(el);
-      }
-      diagLog(diag, `已注入 ${resources.length} 个外部资源`);
+      // ========== 本地版：内联注入资源，彻底摆脱 CDN 依赖 ==========
+      // 1. Tailwind CSS 运行时编译器
+      const twScript = doc.createElement('script');
+      twScript.textContent = TAILWIND_JS;
+      doc.head.appendChild(twScript);
+      diagLog(diag, 'Tailwind CSS 运行时已内联注入');
+
+      // 2. FontAwesome CSS
+      const faStyle = doc.createElement('style');
+      faStyle.textContent = FONTAWESOME_CSS;
+      doc.head.appendChild(faStyle);
+      diagLog(diag, 'FontAwesome CSS 已内联注入');
+
+      // 3. jQuery（保留兼容性）
+      const jqScript = doc.createElement('script');
+      jqScript.textContent = JQUERY_JS;
+      doc.head.appendChild(jqScript);
+      diagLog(diag, 'jQuery 已内联注入');
+
+      // 4. adjust_iframe_height（JS-Slash-Runner 兼容）
+      const adjScript = doc.createElement('script');
+      adjScript.textContent = ADJUST_IFRAME_JS;
+      doc.head.appendChild(adjScript);
+      diagLog(diag, 'adjust_iframe_height 已内联注入');
 
       // 基础样式 + Tailwind fallback（防止 CDN 加载失败导致空白）
       const style = doc.createElement('style');
@@ -457,36 +464,37 @@ function openForum() {
         hideDiagnosticLayer(diag);
       }
 
-      // CDN 资源加载检测：8 秒后检查 tailwindcss 是否生效
+      // 样式系统检测：2 秒后检查 Tailwind 是否生效（内联注入是同步的，不需要等 8 秒）
       setTimeout(() => {
         if (!initSuccess || !doc || !doc.body) return;
-        diagLog(diag, 'CDN 检测: 8秒超时到达，开始检查 Tailwind');
+        diagLog(diag, '样式检测: 开始检查 Tailwind 是否生效');
         const testEl = doc.createElement('div');
-        testEl.className = 'flex h-full';
+        testEl.className = 'flex';
         testEl.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;';
         doc.body.appendChild(testEl);
         const computed = doc.defaultView?.getComputedStyle(testEl);
         const isFlex = computed?.display === 'flex';
-        const isFullHeight = computed?.height === '100%';
         doc.body.removeChild(testEl);
-        diagLog(diag, `CDN 检测结果: flex=${isFlex}, h-full=${isFullHeight}`);
-        if (!isFlex || !isFullHeight) {
-          diagLog(diag, '⚠️ Tailwind CSS 未加载，显示网络错误提示');
-          console.error('[Zsd网游论坛] Tailwind CSS 未加载，检测到网络/CDN 资源加载失败');
+        diagLog(diag, `样式检测结果: flex=${isFlex}`);
+        if (!isFlex) {
+          diagLog(diag, '⚠️ 样式系统未生效，显示错误提示');
+          console.error('[Zsd网游论坛] 样式系统未生效');
           const overlay = doc.createElement('div');
           overlay.id = 'zsd-network-error';
           overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(17,24,39,0.95);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;font-family:sans-serif;text-align:center;color:#e5e7eb;';
           overlay.innerHTML = `
-            <div style="font-size:18px;font-weight:bold;color:#f87171;">⚠️ 网络连接错误</div>
-            <div style="font-size:13px;color:#9ca3af;max-width:300px;line-height:1.5;">样式资源（Tailwind CSS）加载失败。这可能是因为网络不稳定或无法连接外部 CDN。</div>
-            <div style="font-size:12px;color:#6b7280;">论坛已启用基础样式，但部分视觉效果可能不完整。</div>
+            <div style="font-size:18px;font-weight:bold;color:#f87171;">⚠️ 样式加载异常</div>
+            <div style="font-size:13px;color:#9ca3af;max-width:300px;line-height:1.5;">论坛样式系统未能正常启动。这可能是浏览器兼容性问题或资源加载异常。</div>
+            <div style="font-size:12px;color:#6b7280;">请尝试刷新或切换对话后重试。</div>
             <button id="zsd-refresh-btn" style="padding:10px 20px;background:#2563eb;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer;margin-top:8px;">🔄 刷新重试</button>
           `;
           doc.body.appendChild(overlay);
           const refreshBtn = doc.getElementById('zsd-refresh-btn');
           if (refreshBtn) {
             refreshBtn.addEventListener('click', () => {
-              doc.location.reload();
+              // 不要 reload about:blank（会变成纯粹空白），而是销毁重建
+              destroyForum();
+              setTimeout(() => openForum(), 50);
             });
           }
         }
