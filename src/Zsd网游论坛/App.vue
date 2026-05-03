@@ -488,12 +488,42 @@ function formatLogTime(ts: number) {
 }
 
 async function copyText(text: string) {
+  // 优先尝试 iframe 内部的 navigator.clipboard
   try {
-    await navigator.clipboard.writeText(text);
-    toastr.success('已复制到剪贴板');
-  } catch {
-    toastr.error('复制失败');
-  }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      toastr.success('已复制到剪贴板');
+      return;
+    }
+  } catch {}
+
+  // 回退：尝试父窗口的 clipboard
+  try {
+    const parent = (window.parent || window) as any;
+    if (parent.clipboard && parent.clipboard.writeText) {
+      await parent.clipboard.writeText(text);
+      toastr.success('已复制到剪贴板');
+      return;
+    }
+  } catch {}
+
+  // 最终回退：创建临时 textarea + execCommand
+  try {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    const success = document.execCommand('copy');
+    document.body.removeChild(textarea);
+    if (success) {
+      toastr.success('已复制到剪贴板');
+      return;
+    }
+  } catch {}
+
+  toastr.error('复制失败，请手动选中下方文本复制');
 }
 
 async function handleBatchGenerate() {

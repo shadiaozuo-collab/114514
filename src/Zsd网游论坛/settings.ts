@@ -48,7 +48,9 @@ const SectionConfigSchema = z.object({
 
 const defaultOutputFormat = `<format_critical>
 【格式强制约束 - 违反将导致输出无效】
-你必须且只能输出XML标签，禁止输出任何其他格式的文本（禁止Markdown、禁止自由散文、禁止角色扮演描述、禁止对话体、禁止解释性文字）。
+你只能生成论坛帖子、报纸文章或赛事战报的内容，禁止输出任何其他类型的文本。
+禁止输出角色扮演场景、禁止输出对话体、禁止输出解释性文字、禁止输出Markdown。
+你的输出必须且只能是XML标签。
 </format_critical>
 
 <format>
@@ -57,13 +59,13 @@ const defaultOutputFormat = `<format_critical>
   <title>帖子标题</title>
   <content>帖子正文，50-150字，有具体细节</content>
   <authorId>发帖人ID</authorId>
-  <timestamp>故事内时间，如 第三章·深夜</timestamp>
-  <likes>点赞数，0-999之间的整数</likes>
+  <timestamp>时间，可以是故事内时间或现实时间</timestamp>
+  <likes>点赞数</likes>
   <comments>
     <comment>
       <authorId>评论人ID</authorId>
       <content>评论内容，20-80字</content>
-      <timestamp>故事内时间</timestamp>
+      <timestamp>时间</timestamp>
     </comment>
   </comments>
 </post>
@@ -72,7 +74,7 @@ const defaultOutputFormat = `<format_critical>
 <comment>
   <authorId>评论人ID</authorId>
   <content>评论内容</content>
-  <timestamp>故事内时间</timestamp>
+  <timestamp>时间</timestamp>
 </comment>
 </format>
 
@@ -105,11 +107,8 @@ const defaultOutputFormat = `<format_critical>
 2. 【禁止杂物】禁止输出XML以外的任何内容：禁止 Markdown代码块、禁止解释、禁止道歉、禁止"好的"/"明白"/"以下是"等前缀
 3. 【标签闭合】每个<tag>必须有对应的</tag>，禁止未闭合标签
 4. 【内容转义】如果正文包含<或>或&字符，必须转义为&lt; &gt; &amp;
-5. 【时间格式】timestamp必须填故事内时间（如"第三章·深夜"），禁止留空或写现实日期
-6. 【点赞规则】likes必须是0-999之间的纯数字整数，禁止写文字描述
-7. 【评论立场】同一帖子的评论中必须同时存在支持、反对、质疑、调侃等不同立场
-8. 【主题唯一】同一批次的多个帖子主题必须完全不同，禁止同质化
-9. 【零废话】不要输出<post>之外的任何文字，包括格式说明、角色扮演、场景描述
+5. 【主题唯一】同一批次的多个帖子主题必须完全不同，禁止同质化
+6. 【零废话】不要输出<post>之外的任何文字，包括格式说明、角色扮演、场景描述
 </rule>
 
 <anti_repetition>
@@ -120,7 +119,6 @@ const defaultOutputFormat = `<format_critical>
 - 【严禁复制评论】评论内容禁止直接复制帖子正文中的句子或关键词堆砌
 - 【严禁无意义附和】禁止输出"同上""我也是""附议""+1"等无信息量的重复评论
 - 【严禁引用旧帖】评论中禁止出现"之前有人说过""楼上的说得对""正如前面提到的"等引用已有帖子的表述
-- 【观点必须碰撞】同一帖子的评论中必须同时存在支持、反对、质疑、调侃等不同立场，禁止清一色附和发帖人
 - 【用户差异化】不同用户的发帖语气、用词习惯、关注角度必须明显不同
 - 【禁止总结式结尾】帖子正文严禁以"总之""综上所述""希望大家""最后"等总结性语句收尾
 </anti_repetition>`;
