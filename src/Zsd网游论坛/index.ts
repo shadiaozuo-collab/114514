@@ -13,6 +13,53 @@ const themeColors: Record<string, { bg: string; text: string }> = {
   'light': { bg: '#f3f4f6', text: '#2563eb' },
 };
 
+// ========== 多层容错诊断层 ==========
+// 不依赖 Vue、不依赖 CSS、不依赖 CDN，纯原生 DOM API
+// 即使论坛完全空白，这个层也会显示，用户截图即可定位问题
+
+function createDiagnosticLayer(doc: Document): HTMLDivElement | null {
+  try {
+    const d = doc.createElement('div');
+    d.id = 'zsd-diag';
+    d.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:#000;color:#0f0;font-family:monospace,serif;font-size:12px;padding:8px;white-space:pre-wrap;z-index:2147483647;overflow:auto;line-height:1.5;word-break:break-all;';
+    d.textContent = '[Zsd网游论坛] 诊断层已启动\n';
+    // 不依赖 body 是否就绪，直接挂到 documentElement
+    if (doc.body) doc.body.appendChild(d);
+    else doc.documentElement.appendChild(d);
+    return d;
+  } catch (e) {
+    return null;
+  }
+}
+
+function diagLog(diag: HTMLDivElement | null, msg: string) {
+  const line = `[${new Date().toLocaleTimeString()}] ${msg}\n`;
+  // 第一层：诊断 div
+  try {
+    if (diag) diag.textContent += line;
+  } catch (e) {
+    // 第二层：alert（浏览器最基础弹窗，几乎不可能失效）
+    try {
+      alert('Zsd论坛诊断: ' + msg);
+    } catch (e2) {
+      // 第三层：父窗口 toastr
+      try {
+        if (window.parent && (window.parent as any).toastr) {
+          (window.parent as any).toastr.warning('Zsd论坛: ' + msg);
+        }
+      } catch (e3) {}
+    }
+  }
+  // 第四层：console（远程调试 / chrome://inspect 可用）
+  console.log('[Zsd-diag]', msg);
+}
+
+function hideDiagnosticLayer(diag: HTMLDivElement | null) {
+  try {
+    if (diag) diag.style.display = 'none';
+  } catch (e) {}
+}
+
 // Tailwind CSS 关键类名 fallback：当 CDN 加载失败时确保论坛基本布局可用
 const FALLBACK_CSS = `
 .forum-window{display:flex;flex-direction:column;height:100%;overflow:hidden;position:relative;}
@@ -279,10 +326,21 @@ function openForum() {
   console.log('[Zsd网游论坛] iframe 元素已创建，src=', iframeEl.src);
   const doc = iframeEl.contentDocument;
   console.log('[Zsd网游论坛] contentDocument=', doc ? '可用' : 'NULL');
+
+  // ========== 诊断层：在注入任何资源之前就创建 ==========
+  let diag: HTMLDivElement | null = null;
+  if (doc) {
+    diag = createDiagnosticLayer(doc);
+    diagLog(diag, 'openForum() 开始');
+    diagLog(diag, `设备类型: ${isMobile ? '手机' : '桌面'}`);
+    diagLog(diag, `iframe src: ${iframeEl.src}`);
+    diagLog(diag, `contentDocument: ${doc ? '可用' : 'NULL'}`);
+  }
+
   if (doc) {
     // 延迟到下一帧执行 heavy 初始化，避免点击论坛按钮时主线程卡顿
     requestAnimationFrame(() => {
-      console.log('[Zsd网游论坛] requestAnimationFrame 执行，开始加载资源和初始化 Vue');
+      diagLog(diag, 'requestAnimationFrame 执行');
       // 添加外部资源（CDN）
       const resources = [
         { tag: 'link', attrs: { rel: 'stylesheet', href: 'https://testingcf.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css' } },
@@ -300,27 +358,31 @@ function openForum() {
         if (el.tagName === 'SCRIPT') (el as HTMLScriptElement).async = false;
         doc.head.appendChild(el);
       }
+      diagLog(diag, `已注入 ${resources.length} 个外部资源`);
 
       // 基础样式 + Tailwind fallback（防止 CDN 加载失败导致空白）
       const style = doc.createElement('style');
       style.textContent = '*,*::before,*::after{box-sizing:border-box;}html,body{margin:0!important;padding:0;overflow:hidden!important;max-width:100%!important;height:100%!important;background-color:transparent!important;}' + FALLBACK_CSS;
       doc.head.appendChild(style);
+      diagLog(diag, '基础样式 + FALLBACK_CSS 已注入');
 
       styleTeleport = teleportStyle(doc.head);
+      diagLog(diag, 'styleTeleport 已建立');
 
       // 启动容错：如果 Vue 初始化失败，尝试自动修复数据后重试一次
       let initSuccess = false;
       function tryInitForum() {
-        console.log('[Zsd网游论坛] tryInitForum() 开始');
+        diagLog(diag, 'tryInitForum() 开始');
         try {
           setActivePinia(createPinia());
-          console.log('[Zsd网游论坛] Pinia 已激活');
+          diagLog(diag, '✅ Pinia 已激活');
           const windowControls = reactive({ requestClose: false });
           app = createApp(App);
-          console.log('[Zsd网游论坛] Vue app 已创建');
+          diagLog(diag, '✅ Vue app 已创建');
           app.provide('windowControls', windowControls);
           app.config.errorHandler = (err, instance, info) => {
             console.error('[Zsd网游论坛] Vue 渲染错误:', err, info);
+            diagLog(diag, `❌ Vue 渲染错误: ${(err as Error)?.message || '未知'} (${info})`);
             if (doc && doc.body && doc.body.children.length === 0) {
               doc.body.innerHTML = `
                 <div style="padding: 20px; color: #ef4444; font-family: sans-serif; text-align: center;">
@@ -332,7 +394,7 @@ function openForum() {
             }
           };
           app.mount(doc.body);
-          console.log('[Zsd网游论坛] Vue app 已挂载到 body');
+          diagLog(diag, '✅ Vue app 已挂载到 body');
 
           watch(() => windowControls.requestClose, v => {
             if (v) {
@@ -350,40 +412,55 @@ function openForum() {
           setupAutoInject();
           setupAutoGenerate();
           initSuccess = true;
-          console.log('[Zsd网游论坛] 论坛初始化完全成功');
+          diagLog(diag, '✅ 论坛初始化完全成功');
           return true;
         } catch (e: any) {
+          const errMsg = e?.message || String(e);
+          diagLog(diag, `❌ Vue 初始化失败: ${errMsg}`);
           console.error('[Zsd网游论坛] Vue 初始化失败:', e);
           return false;
         }
       }
 
       if (!tryInitForum()) {
-        console.warn('[Zsd网游论坛] 首次初始化失败，尝试自动修复数据...');
+        diagLog(diag, '首次初始化失败，尝试自动修复数据...');
         try {
           const store = useForumSettingsStore();
           const repaired = store.repairForumData();
+          diagLog(diag, `repairForumData() 返回: ${repaired}`);
           if (repaired) {
             if (app) { app.unmount(); app = null; }
             if (styleTeleport) { styleTeleport.destroy(); styleTeleport = null; }
             doc.body.innerHTML = '';
+            // 修复后重新创建诊断层（innerHTML 会清掉它）
+            diag = createDiagnosticLayer(doc);
+            diagLog(diag, '数据已修复，重新初始化...');
             const retryOk = tryInitForum();
             if (retryOk) {
               toastr.success('[论坛] 数据已自动修复，论坛加载成功');
             } else {
+              diagLog(diag, '修复后重试仍失败，显示修复面板');
               showRepairFallback(doc);
             }
           } else {
+            diagLog(diag, '数据无需修复，显示修复面板');
             showRepairFallback(doc);
           }
-        } catch (e) {
+        } catch (e: any) {
+          diagLog(diag, `修复过程异常: ${e?.message || e}`);
           showRepairFallback(doc);
         }
+      }
+
+      // 初始化成功，隐藏诊断层
+      if (initSuccess) {
+        hideDiagnosticLayer(diag);
       }
 
       // CDN 资源加载检测：8 秒后检查 tailwindcss 是否生效
       setTimeout(() => {
         if (!initSuccess || !doc || !doc.body) return;
+        diagLog(diag, 'CDN 检测: 8秒超时到达，开始检查 Tailwind');
         const testEl = doc.createElement('div');
         testEl.className = 'flex h-full';
         testEl.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;';
@@ -392,7 +469,9 @@ function openForum() {
         const isFlex = computed?.display === 'flex';
         const isFullHeight = computed?.height === '100%';
         doc.body.removeChild(testEl);
+        diagLog(diag, `CDN 检测结果: flex=${isFlex}, h-full=${isFullHeight}`);
         if (!isFlex || !isFullHeight) {
+          diagLog(diag, '⚠️ Tailwind CSS 未加载，显示网络错误提示');
           console.error('[Zsd网游论坛] Tailwind CSS 未加载，检测到网络/CDN 资源加载失败');
           const overlay = doc.createElement('div');
           overlay.id = 'zsd-network-error';
@@ -422,6 +501,9 @@ function openForum() {
             <button id="zsd-clear-btn" style="padding: 6px 12px; background: transparent; color: #6b7280; border: 1px solid #374151; border-radius: 6px; font-size: 11px; cursor: pointer;">完全清理（会重置配置）</button>
           </div>
         `;
+        // innerHTML 会清除诊断层，重新创建一个（保持日志可见）
+        diag = createDiagnosticLayer(doc);
+        diagLog(diag, '已进入修复模式，请查看上方按钮');
         const repairBtn = doc.getElementById('zsd-repair-btn');
         const clearBtn = doc.getElementById('zsd-clear-btn');
         if (repairBtn) {
@@ -449,6 +531,7 @@ function openForum() {
       }
     });
   } else {
+    diagLog(null, '❌ iframe contentDocument 为 NULL，无法初始化');
     console.error('[Zsd网游论坛] iframe contentDocument 为 null，无法初始化');
   }
 }
