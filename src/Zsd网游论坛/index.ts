@@ -105,10 +105,12 @@ function isMobileDevice() {
 }
 
 function openForum() {
+  console.log('[Zsd网游论坛] openForum() 被调用');
   const isMobile = isMobileDevice();
 
   // 如果论坛已存在只是被隐藏了，直接显示并刷新数据
   if ($iframe && $iframe.parent().length) {
+    console.log('[Zsd网游论坛] 论坛已存在，检查可见性');
     const $container = $iframe.parent();
     if (!$container.is(':visible')) {
       $container.show();
@@ -274,10 +276,13 @@ function openForum() {
 
   // 手动构建 iframe DOM，完全避免 doc.write() 的副作用
   const iframeEl = $iframe[0] as HTMLIFrameElement;
+  console.log('[Zsd网游论坛] iframe 元素已创建，src=', iframeEl.src);
   const doc = iframeEl.contentDocument;
+  console.log('[Zsd网游论坛] contentDocument=', doc ? '可用' : 'NULL');
   if (doc) {
     // 延迟到下一帧执行 heavy 初始化，避免点击论坛按钮时主线程卡顿
     requestAnimationFrame(() => {
+      console.log('[Zsd网游论坛] requestAnimationFrame 执行，开始加载资源和初始化 Vue');
       // 添加外部资源（CDN）
       const resources = [
         { tag: 'link', attrs: { rel: 'stylesheet', href: 'https://testingcf.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css' } },
@@ -306,10 +311,13 @@ function openForum() {
       // 启动容错：如果 Vue 初始化失败，尝试自动修复数据后重试一次
       let initSuccess = false;
       function tryInitForum() {
+        console.log('[Zsd网游论坛] tryInitForum() 开始');
         try {
           setActivePinia(createPinia());
+          console.log('[Zsd网游论坛] Pinia 已激活');
           const windowControls = reactive({ requestClose: false });
           app = createApp(App);
+          console.log('[Zsd网游论坛] Vue app 已创建');
           app.provide('windowControls', windowControls);
           app.config.errorHandler = (err, instance, info) => {
             console.error('[Zsd网游论坛] Vue 渲染错误:', err, info);
@@ -324,6 +332,7 @@ function openForum() {
             }
           };
           app.mount(doc.body);
+          console.log('[Zsd网游论坛] Vue app 已挂载到 body');
 
           watch(() => windowControls.requestClose, v => {
             if (v) {
@@ -341,6 +350,7 @@ function openForum() {
           setupAutoInject();
           setupAutoGenerate();
           initSuccess = true;
+          console.log('[Zsd网游论坛] 论坛初始化完全成功');
           return true;
         } catch (e: any) {
           console.error('[Zsd网游论坛] Vue 初始化失败:', e);
@@ -712,10 +722,15 @@ function registerExtensionMenuItem() {
 $(() => {
   appendInexistentScriptButtons([{ name: '论坛', visible: true }]);
   eventOn(getButtonEvent('论坛'), () => {
-    if ($iframe && $iframe.parent().is(':visible')) {
-      hideForum();
-    } else {
-      openForum();
+    try {
+      if ($iframe && $iframe.parent().is(':visible')) {
+        hideForum();
+      } else {
+        openForum();
+      }
+    } catch (e: any) {
+      console.error('[Zsd网游论坛] 点击论坛按钮时发生异常:', e);
+      toastr.error(`[论坛] 打开失败: ${e?.message || e}，请查看浏览器控制台`);
     }
   });
   registerExtensionMenuItem();
