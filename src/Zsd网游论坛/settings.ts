@@ -445,6 +445,84 @@ export const useForumSettingsStore = defineStore('forum-settings', () => {
     toastr.success('论坛变量已清除');
   }
 
+  /**
+   * 智能修复：只清理损坏的帖子数据，保留所有配置（自动生成、API、板块设置等）
+   */
+  function repairForumData() {
+    try {
+      const vars = loadVars();
+      const migrated = migrateLegacySettings(vars);
+      let parsed = safeParseSettings(migrated);
+
+      // 逐个板块、逐个帖子验证，清理损坏项
+      let repairedCount = 0;
+      let removedCount = 0;
+      for (const sectionId of Object.keys(parsed.Zposts)) {
+        const posts = (parsed.Zposts as any)[sectionId];
+        if (!Array.isArray(posts)) {
+          delete (parsed.Zposts as any)[sectionId];
+          removedCount += 1;
+          continue;
+        }
+        const validPosts: any[] = [];
+        for (const post of posts) {
+          try {
+            const validated = PostSchema.parse(post);
+            // 额外检查：comments 必须是数组
+            if (!Array.isArray(validated.comments)) {
+              (validated as any).comments = [];
+              repairedCount += 1;
+            }
+            // 额外检查：metadata 必须是对象或 undefined
+            if (validated.metadata !== undefined && (typeof validated.metadata !== 'object' || Array.isArray(validated.metadata))) {
+              (validated as any).metadata = undefined;
+              repairedCount += 1;
+            }
+            validPosts.push(validated);
+          } catch (e) {
+            removedCount += 1;
+            console.warn('[Z论坛] 修复时移除损坏帖子:', e);
+          }
+        }
+        (parsed.Zposts as any)[sectionId] = validPosts;
+      }
+
+      // 确保每个现有板块都有对应的 posts 数组（防止 section 存在但 posts 缺失）
+      for (const sec of parsed.Zsections) {
+        if (!parsed.Zposts[sec.id]) {
+          parsed.Zposts[sec.id] = [];
+        }
+      }
+
+      // 清理孤儿的 posts key（板块已删除但帖子还在）
+      const validSectionIds = new Set(parsed.Zsections.map(s => s.id));
+      for (const key of Object.keys(parsed.Zposts)) {
+        if (!validSectionIds.has(key)) {
+          delete (parsed.Zposts as any)[key];
+        }
+      }
+
+      // 应用修复后的数据
+      suppressSync = true;
+      Object.assign(settings.value, parsed);
+      nextTick(() => {
+        suppressSync = false;
+        forceSync();
+      });
+
+      if (removedCount > 0 || repairedCount > 0) {
+        toastr.success(`[论坛] 已修复数据：移除 ${removedCount} 条损坏帖子，修复 ${repairedCount} 个字段`);
+      } else {
+        toastr.info('[论坛] 数据自检完成，未发现损坏');
+      }
+      return true;
+    } catch (e: any) {
+      console.error('[Z论坛] 智能修复失败:', e);
+      toastr.error(`[论坛] 数据修复失败：${e?.message || e}，建议执行完全清理`);
+      return false;
+    }
+  }
+
   function reloadFromVars() {
     suppressSync = true;
     try {
@@ -571,6 +649,7 @@ export const useForumSettingsStore = defineStore('forum-settings', () => {
     addComment,
     deletePost,
     clearAllForumVariables,
+    repairForumData,
     reloadFromVars,
     getSectionName,
     getSectionPrompt,

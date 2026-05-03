@@ -233,40 +233,113 @@ function openForum() {
 
     styleTeleport = teleportStyle(doc.head);
 
-    setActivePinia(createPinia());
-    const windowControls = reactive({ requestClose: false });
-    app = createApp(App);
-    app.provide('windowControls', windowControls);
-    app.config.errorHandler = (err, instance, info) => {
-      console.error('[Zsd网游论坛] Vue 渲染错误:', err, info);
-      // 在 iframe body 中显示错误提示，避免透明空框
-      if (doc && doc.body && doc.body.children.length === 0) {
-        doc.body.innerHTML = `
-          <div style="padding: 20px; color: #ef4444; font-family: sans-serif; text-align: center;">
-            <div style="font-size: 14px; font-weight: bold; margin-bottom: 8px;">⚠️ 论坛加载失败</div>
-            <div style="font-size: 12px; color: #9ca3af;">${(err as Error)?.message || '未知错误'}</div>
-            <div style="font-size: 11px; color: #6b7280; margin-top: 12px;">请尝试刷新页面或切换对话后重试</div>
-          </div>
-        `;
+    // 启动容错：如果 Vue 初始化失败，尝试自动修复数据后重试一次
+    let initSuccess = false;
+    function tryInitForum() {
+      try {
+        setActivePinia(createPinia());
+        const windowControls = reactive({ requestClose: false });
+        app = createApp(App);
+        app.provide('windowControls', windowControls);
+        app.config.errorHandler = (err, instance, info) => {
+          console.error('[Zsd网游论坛] Vue 渲染错误:', err, info);
+          // 在 iframe body 中显示错误提示，避免透明空框
+          if (doc && doc.body && doc.body.children.length === 0) {
+            doc.body.innerHTML = `
+              <div style="padding: 20px; color: #ef4444; font-family: sans-serif; text-align: center;">
+                <div style="font-size: 14px; font-weight: bold; margin-bottom: 8px;">⚠️ 论坛加载失败</div>
+                <div style="font-size: 12px; color: #9ca3af;">${(err as Error)?.message || '未知错误'}</div>
+                <div style="font-size: 11px; color: #6b7280; margin-top: 12px;">请尝试刷新页面或切换对话后重试</div>
+              </div>
+            `;
+          }
+        };
+        app.mount(doc.body);
+
+        watch(() => windowControls.requestClose, v => {
+          if (v) {
+            windowControls.requestClose = false;
+            hideForum();
+          }
+        });
+
+        const store = useForumSettingsStore();
+        updateHeaderStyle(store.settings.Ztheme, store.settings.ZforumName);
+        watch(() => store.settings.Ztheme, (theme) => updateHeaderStyle(theme, store.settings.ZforumName));
+        watch(() => store.settings.ZforumName, (name) => updateHeaderStyle(store.settings.Ztheme, name));
+
+        injectForumContext();
+        setupAutoInject();
+        setupAutoGenerate();
+        initSuccess = true;
+        return true;
+      } catch (e: any) {
+        console.error('[Zsd网游论坛] Vue 初始化失败:', e);
+        return false;
       }
-    };
-    app.mount(doc.body);
+    }
 
-    watch(() => windowControls.requestClose, v => {
-      if (v) {
-        windowControls.requestClose = false;
-        hideForum();
+    if (!tryInitForum()) {
+      // 第一次初始化失败，尝试修复数据后重试
+      console.warn('[Zsd网游论坛] 首次初始化失败，尝试自动修复数据...');
+      try {
+        const store = useForumSettingsStore();
+        const repaired = store.repairForumData();
+        if (repaired) {
+          // 清理残留后重试
+          if (app) { app.unmount(); app = null; }
+          if (styleTeleport) { styleTeleport.destroy(); styleTeleport = null; }
+          // 清空 iframe body
+          doc.body.innerHTML = '';
+          const retryOk = tryInitForum();
+          if (retryOk) {
+            toastr.success('[论坛] 数据已自动修复，论坛加载成功');
+          } else {
+            showRepairFallback(doc);
+          }
+        } else {
+          showRepairFallback(doc);
+        }
+      } catch (e) {
+        showRepairFallback(doc);
       }
-    });
+    }
 
-    const store = useForumSettingsStore();
-    updateHeaderStyle(store.settings.Ztheme, store.settings.ZforumName);
-    watch(() => store.settings.Ztheme, (theme) => updateHeaderStyle(theme, store.settings.ZforumName));
-    watch(() => store.settings.ZforumName, (name) => updateHeaderStyle(store.settings.Ztheme, name));
-
-    injectForumContext();
-    setupAutoInject();
-    setupAutoGenerate();
+    function showRepairFallback(doc: Document) {
+      doc.body.innerHTML = `
+        <div style="padding: 24px; color: #e5e7eb; font-family: sans-serif; text-align: center; background: #111827; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;">
+          <div style="font-size: 16px; font-weight: bold; color: #f87171;">⚠️ 论坛数据损坏</div>
+          <div style="font-size: 12px; color: #9ca3af; max-width: 260px;">帖子数据存在损坏，导致论坛无法加载。点击下方按钮可智能修复（保留所有设置和配置）。</div>
+          <button id="zsd-repair-btn" style="padding: 8px 16px; background: #2563eb; color: white; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; margin-top: 8px;">🔧 一键修复数据</button>
+          <button id="zsd-clear-btn" style="padding: 6px 12px; background: transparent; color: #6b7280; border: 1px solid #374151; border-radius: 6px; font-size: 11px; cursor: pointer;">完全清理（会重置配置）</button>
+        </div>
+      `;
+      const repairBtn = doc.getElementById('zsd-repair-btn');
+      const clearBtn = doc.getElementById('zsd-clear-btn');
+      if (repairBtn) {
+        repairBtn.addEventListener('click', () => {
+          try {
+            const store = useForumSettingsStore();
+            store.repairForumData();
+            // 修复后刷新 iframe
+            doc.location.reload();
+          } catch (e: any) {
+            alert('修复失败: ' + (e?.message || e));
+          }
+        });
+      }
+      if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+          try {
+            const store = useForumSettingsStore();
+            store.clearAllForumVariables();
+            doc.location.reload();
+          } catch (e: any) {
+            alert('清理失败: ' + (e?.message || e));
+          }
+        });
+      }
+    }
   } else {
     console.error('[Zsd网游论坛] iframe contentDocument 为 null，无法初始化');
   }
