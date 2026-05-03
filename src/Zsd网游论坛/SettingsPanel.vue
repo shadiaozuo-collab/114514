@@ -40,7 +40,7 @@
               <i class="fa-solid fa-trash-can"></i>
             </button>
           </div>
-          <textarea v-model="sec.prompt" rows="3" class="w-full text-xs px-2 py-1 rounded outline-none border focus:border-[var(--f-accent)] resize-none" :style="inputStyle" :placeholder="`板块${index + 1}的系统提示词`"></textarea>
+          <textarea v-model="sec.prompt" rows="6" class="w-full text-xs px-2 py-1 rounded outline-none border focus:border-[var(--f-accent)] resize-y" :style="inputStyle" :placeholder="`板块${index + 1}的系统提示词`"></textarea>
         </div>
         <button
           v-if="store.settings.Zsections.length < 5"
@@ -214,7 +214,7 @@
       </div>
       <div v-if="store.settings.ZuseJailbreak">
         <label class="text-[11px] text-[var(--f-text-secondary)] block mb-1">破甲提示词</label>
-        <textarea v-model="store.settings.ZjailbreakPrompt" rows="4" class="w-full text-xs px-2 py-1.5 rounded outline-none border focus:border-[var(--f-accent)] resize-none" :style="inputStyle"></textarea>
+        <textarea v-model="store.settings.ZjailbreakPrompt" rows="6" class="w-full text-xs px-2 py-1.5 rounded outline-none border focus:border-[var(--f-accent)] resize-y" :style="inputStyle"></textarea>
         <p class="text-[10px] mt-0.5" :style="{ color: 'var(--f-text-muted)' }">此内容会追加到系统提示词末尾，用于绕过模型安全限制</p>
       </div>
 
@@ -336,7 +336,7 @@
             </select>
           </div>
         </div>
-        <textarea v-model="sec.prompt" rows="4" class="w-full text-xs px-2 py-1.5 rounded outline-none border focus:border-[var(--f-accent)] resize-none" :style="inputStyle"></textarea>
+        <textarea v-model="sec.prompt" rows="6" class="w-full text-xs px-2 py-1.5 rounded outline-none border focus:border-[var(--f-accent)] resize-y" :style="inputStyle"></textarea>
       </div>
       <div>
         <label class="text-[11px] text-[var(--f-text-secondary)] block mb-1">输出格式提示</label>
