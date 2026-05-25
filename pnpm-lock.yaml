@@ -257,7 +257,11 @@ importers:
         version: 20.3.0(@vueuse/core@13.9.0(vue@3.5.34(typescript@6.0.0-dev.20250807)))
       unplugin-vue-components:
         specifier: ^29.2.0
+<<<<<<< HEAD
         version: 29.2.0(@babel/parser@7.29.7)(vue@3.5.34(typescript@6.0.0-dev.20250807))
+=======
+        version: 29.2.0(@babel/parser@7.29.3)(vue@3.5.34(typescript@6.0.0-dev.20250807))
+>>>>>>> 1edcc383164d8213f030dcdfabc0b6563966ae13
       vue-eslint-parser:
         specifier: ^10.4.0
         version: 10.4.0(eslint@9.39.4(jiti@2.7.0))
@@ -289,6 +293,7 @@ packages:
   '@antfu/utils@0.7.10':
     resolution: {integrity: sha512-+562v9k4aI80m1+VuMHehNJWLOFjBnXn3tdOitzD0il5b7smkSBal4+a3oKiQTbrwMmN/TBUMDvbdoWDehgOww==}
 
+<<<<<<< HEAD
   '@babel/code-frame@7.29.7':
     resolution: {integrity: sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw==}
     engines: {node: '>=6.9.0'}
@@ -308,6 +313,27 @@ packages:
 
   '@babel/types@7.29.7':
     resolution: {integrity: sha512-4zBIxpPzowiZpusoFkyGVwakdRJUyuH5PxQ/PrqghfdFWWasvnCdPfQXHrenDai+gyLARulZjZowCOj6fjT4pA==}
+=======
+  '@babel/code-frame@7.29.0':
+    resolution: {integrity: sha512-9NhCeYjq9+3uxgdtp20LSiJXJvN0FeCtNGpJxuMFZ1Kv3cWUNb6DOhJwUvcVCzKGR66cw4njwM6hrJLqgOwbcw==}
+    engines: {node: '>=6.9.0'}
+
+  '@babel/helper-string-parser@7.27.1':
+    resolution: {integrity: sha512-qMlSxKbpRlAridDExk92nSobyDdpPijUq2DW6oDnUqd0iOGxmQjyqhMIihI9+zv4LPyZdRje2cavWPbCbWm3eA==}
+    engines: {node: '>=6.9.0'}
+
+  '@babel/helper-validator-identifier@7.28.5':
+    resolution: {integrity: sha512-qSs4ifwzKJSV39ucNjsvc6WVHs6b7S03sOh2OcHF9UHfVPqWWALUsNUVzhSBiItjRZoLHx7nIarVjqKVusUZ1Q==}
+    engines: {node: '>=6.9.0'}
+
+  '@babel/parser@7.29.3':
+    resolution: {integrity: sha512-b3ctpQwp+PROvU/cttc4OYl4MzfJUWy6FZg+PMXfzmt/+39iHVF0sDfqay8TQM3JA2EUOyKcFZt75jWriQijsA==}
+    engines: {node: '>=6.0.0'}
+    hasBin: true
+
+  '@babel/types@7.29.0':
+    resolution: {integrity: sha512-LwdZHpScM4Qz8Xw2iKSzS+cfglZzJGvofQICy7W7v4caru4EaAmyUuO6BGrbyQ2mYV11W0U8j5mBhd14dd3B0A==}
+>>>>>>> 1edcc383164d8213f030dcdfabc0b6563966ae13
     engines: {node: '>=6.9.0'}
 
   '@cspotcode/source-map-support@0.8.1':
@@ -4174,6 +4200,7 @@ snapshots:
 
   '@antfu/utils@0.7.10': {}
 
+<<<<<<< HEAD
   '@babel/code-frame@7.29.7':
     dependencies:
       '@babel/helper-validator-identifier': 7.29.7
@@ -4192,6 +4219,26 @@ snapshots:
     dependencies:
       '@babel/helper-string-parser': 7.29.7
       '@babel/helper-validator-identifier': 7.29.7
+=======
+  '@babel/code-frame@7.29.0':
+    dependencies:
+      '@babel/helper-validator-identifier': 7.28.5
+      js-tokens: 4.0.0
+      picocolors: 1.1.1
+
+  '@babel/helper-string-parser@7.27.1': {}
+
+  '@babel/helper-validator-identifier@7.28.5': {}
+
+  '@babel/parser@7.29.3':
+    dependencies:
+      '@babel/types': 7.29.0
+
+  '@babel/types@7.29.0':
+    dependencies:
+      '@babel/helper-string-parser': 7.27.1
+      '@babel/helper-validator-identifier': 7.28.5
+>>>>>>> 1edcc383164d8213f030dcdfabc0b6563966ae13
 
   '@cspotcode/source-map-support@0.8.1':
     dependencies:
@@ -4805,7 +4852,11 @@ snapshots:
 
   '@vue/compiler-core@3.5.34':
     dependencies:
+<<<<<<< HEAD
       '@babel/parser': 7.29.7
+=======
+      '@babel/parser': 7.29.3
+>>>>>>> 1edcc383164d8213f030dcdfabc0b6563966ae13
       '@vue/shared': 3.5.34
       entities: 7.0.1
       estree-walker: 2.0.2
@@ -4818,7 +4869,11 @@ snapshots:
 
   '@vue/compiler-sfc@3.5.34':
     dependencies:
+<<<<<<< HEAD
       '@babel/parser': 7.29.7
+=======
+      '@babel/parser': 7.29.3
+>>>>>>> 1edcc383164d8213f030dcdfabc0b6563966ae13
       '@vue/compiler-core': 3.5.34
       '@vue/compiler-dom': 3.5.34
       '@vue/compiler-ssr': 3.5.34
@@ -7173,7 +7228,11 @@ snapshots:
 
   parse-json@5.2.0:
     dependencies:
+<<<<<<< HEAD
       '@babel/code-frame': 7.29.7
+=======
+      '@babel/code-frame': 7.29.0
+>>>>>>> 1edcc383164d8213f030dcdfabc0b6563966ae13
       error-ex: 1.3.4
       json-parse-even-better-errors: 2.3.1
       lines-and-columns: 1.2.4
@@ -8059,7 +8118,11 @@ snapshots:
       pathe: 2.0.3
       picomatch: 4.0.4
 
+<<<<<<< HEAD
   unplugin-vue-components@29.2.0(@babel/parser@7.29.7)(vue@3.5.34(typescript@6.0.0-dev.20250807)):
+=======
+  unplugin-vue-components@29.2.0(@babel/parser@7.29.3)(vue@3.5.34(typescript@6.0.0-dev.20250807)):
+>>>>>>> 1edcc383164d8213f030dcdfabc0b6563966ae13
     dependencies:
       chokidar: 3.6.0
       debug: 4.4.3
@@ -8071,7 +8134,11 @@ snapshots:
       unplugin-utils: 0.3.1
       vue: 3.5.34(typescript@6.0.0-dev.20250807)
     optionalDependencies:
+<<<<<<< HEAD
       '@babel/parser': 7.29.7
+=======
+      '@babel/parser': 7.29.3
+>>>>>>> 1edcc383164d8213f030dcdfabc0b6563966ae13
     transitivePeerDependencies:
       - supports-color
 
