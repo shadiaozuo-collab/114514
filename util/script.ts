@@ -24,12 +24,19 @@ export function teleportStyle(
 }
 
 export function createScriptIdIframe(): JQuery<HTMLIFrameElement> {
+<<<<<<< HEAD
   // 追加随机注释，避免浏览器缓存相同 srcdoc 导致 load 事件不触发
   const uniqueSrcdoc = iframe_srcdoc + `\n<!-- ${Date.now()}_${Math.random().toString(36).slice(2)} -->`;
   return $(`<iframe>`).attr({
     script_id: getScriptId(),
     frameborder: 0,
     srcdoc: uniqueSrcdoc,
+=======
+  return $(`<iframe>`).attr({
+    script_id: getScriptId(),
+    frameborder: 0,
+    srcdoc: iframe_srcdoc,
+>>>>>>> fe7d6686eaa214f144c2a734be2e26ca399f3d3d
   }) as JQuery<HTMLIFrameElement>;
 }
 
